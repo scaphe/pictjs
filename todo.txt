@@ -1,0 +1,7 @@
+TODO:
+o  Draw multiple boxes on the screen with correct labels in them
+o  Drag to move the boxes around
+o  Draw arrows on top to centre of boxes for the links-to relationships
+o  Move the arrows so they end at the edge of a box
+o  Curved lines, roughly ok arrow heads
+o  Colours for the lines, boxes

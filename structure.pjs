@@ -2,7 +2,20 @@
 	"shapes": [
 		{
 			"id": "dave",
-			"shape": "rect"
+			"shape": "rect",
+			"links-to": [
+				{ "id": "fred", "label": "friend" },
+				"jane"
+			]
+		},
+		{
+			"id": "fred"
+		},
+		{
+			"id": "jane"
+		},
+		{
+			"id": "bill"
 		}
 	]
 }
