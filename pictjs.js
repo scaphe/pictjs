@@ -8,7 +8,7 @@ $.ajaxSetup({beforeSend: function(xhr){
 }
 });
 
-
+var libs = createPictJsLibs();
 var PictJS = function(canvasId, structureFile, layoutFile) {
 	//-----------------------------------------------
 	//--- Library functions, taken off the net
@@ -104,6 +104,103 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 	    ctx.fill();
 	  }        
 	};
+
+	// From http://stackoverflow.com/questions/7054272/how-to-draw-smooth-curve-through-n-points-using-javascript-html5-canvas
+	
+	function getCurvePoints(ptsa, tension, isClosed, numOfSegments) {
+
+	    // use input value if provided, or use a default value   
+	    tension = (typeof tension != 'undefined') ? tension : 0.5;
+	    isClosed = isClosed ? isClosed : false;
+	    numOfSegments = numOfSegments ? numOfSegments : 16;
+
+	    var _pts = [], res = [],    // clone array
+	        x, y,           // our x,y coords
+	        t1x, t2x, t1y, t2y, // tension vectors
+	        c1, c2, c3, c4,     // cardinal points
+	        st, t, i;       // steps based on num. of segments
+
+	    // clone array so we don't change the original
+	    _pts = ptsa.slice(0);
+
+	    // The algorithm require a previous and next point to the actual point array.
+	    // Check if we will draw closed or open curve.
+	    // If closed, copy end points to beginning and first points to end
+	    // If open, duplicate first points to befinning, end points to end
+	    if (isClosed) {
+	        _pts.unshift(ptsa[ptsa.length - 1]);
+	        _pts.unshift(ptsa[ptsa.length - 2]);
+	        _pts.unshift(ptsa[ptsa.length - 1]);
+	        _pts.unshift(ptsa[ptsa.length - 2]);
+	        _pts.push(ptsa[0]);
+	        _pts.push(ptsa[1]);
+	    }
+	    else {
+	        _pts.unshift(ptsa[1]);   //copy 1. point and insert at beginning
+	        _pts.unshift(ptsa[0]);
+	        _pts.push(ptsa[ptsa.length - 2]); //copy last point and append
+	        _pts.push(ptsa[ptsa.length - 1]);
+	    }
+
+	    // ok, lets start..
+
+	    // 1. loop goes through point array
+	    // 2. loop goes through each segment between the 2 pts + 1e point before and after
+	    for (i=2; i < (_pts.length - 4); i+=2) {
+	        for (t=0; t <= numOfSegments; t++) {
+
+	            // calc tension vectors
+	            t1x = (_pts[i+2] - _pts[i-2]) * tension;
+	            t2x = (_pts[i+4] - _pts[i]) * tension;
+
+	            t1y = (_pts[i+3] - _pts[i-1]) * tension;
+	            t2y = (_pts[i+5] - _pts[i+1]) * tension;
+
+	            // calc step
+	            st = t / numOfSegments;
+
+	            // calc cardinals
+	            c1 =   2 * Math.pow(st, 3)  - 3 * Math.pow(st, 2) + 1; 
+	            c2 = -(2 * Math.pow(st, 3)) + 3 * Math.pow(st, 2); 
+	            c3 =       Math.pow(st, 3)  - 2 * Math.pow(st, 2) + st; 
+	            c4 =       Math.pow(st, 3)  -     Math.pow(st, 2);
+
+	            // calc x and y cords with common control vectors
+	            x = c1 * _pts[i]    + c2 * _pts[i+2] + c3 * t1x + c4 * t2x;
+	            y = c1 * _pts[i+1]  + c2 * _pts[i+3] + c3 * t1y + c4 * t2y;
+
+	            //store points in array
+	            res.push(x);
+	            res.push(y);
+
+	        }
+	    }
+
+	    return res;
+	};
+
+	function drawLinesForCurve(ctx, pts) {
+	    ctx.moveTo(pts[0], pts[1]);
+	    for(i=2;i<pts.length-1;i+=2) ctx.lineTo(pts[i], pts[i+1]);
+	};
+
+	function drawCurve(ctx, ptsa, tension, isClosed, numOfSegments, showPoints) {
+	    showPoints  = showPoints ? showPoints : true;
+
+	    ctx.beginPath();
+
+	    console.log('Drawing curve');
+	    drawLinesForCurve(ctx, getCurvePoints(ptsa, tension, isClosed, numOfSegments));
+
+	    if (showPoints) {
+	        ctx.stroke();
+	        ctx.beginPath();
+	        for(var i=0;i<ptsa.length-1;i+=2) 
+	                ctx.rect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
+	    }
+	};
+
+
 
 	//--- End Library functions, taken off the net
 	//-----------------------------------------------
@@ -208,16 +305,25 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		// ctx.lineTo(200,100);
 		// ctx.stroke();
 
-		// // Line with an arrow head
-		// ctx.fillStyle='red';
-		// ctx.strokeStyle='red';
-		// drawLineArrow(ctx, 30,60, 90,120);
+		// Line with an arrow head
+		ctx.fillStyle='red';
+		ctx.strokeStyle='red';
+		drawLineArrow(ctx, 30,60, 90,120);
 
 		// Draw some text
 		ctx.fillStyle='black';
 		ctx.font = "30px Arial";
 		var label = shape.label || shape.id;
 		ctx.fillText(label,pos.x+4,pos.y+30+4);
+
+		// Draw a curvy line
+		ctx.strokeStyle="black";
+		var myPoints = [10,10, 40,30, 100,10, 100,50]; //minimum two points
+		var tension = 0.5;
+
+		drawCurve(ctx, myPoints); //default tension=0.5
+		//drawCurve(ctx, myPoints, tension);
+		ctx.stroke();
 
 		// // Underline the text, by knowing how wide it is, note font is 30px, so is 30 high
 		// var m = ctx.measureText(label);
