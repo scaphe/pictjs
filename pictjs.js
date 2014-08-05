@@ -8,203 +8,26 @@ $.ajaxSetup({beforeSend: function(xhr){
 }
 });
 
-var libs = createPictJsLibs();
-var PictJS = function(canvasId, structureFile, layoutFile) {
-	//-----------------------------------------------
-	//--- Library functions, taken off the net
+var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
+	var that = {};
 
-	// Arrow heads from: http://deepliquid.com/blog/archives/98
-	var arrow = [
-	    [ 2, 0 ],
-	    [ -10, -4 ],
-	    [ -10, 4]
-	];
+	that.structure = {};
+	that.layout = [];
+	that.classes = {};
+	that.actions = [];  // Undoable actions
+	that.currentAction = undefined;
 
-	function drawFilledPolygon(ctx, shape) {
-	    ctx.beginPath();
-	    ctx.moveTo(shape[0][0],shape[0][1]);
-
-	    for(p in shape)
-	        if (p > 0) ctx.lineTo(shape[p][0],shape[p][1]);
-
-	    ctx.lineTo(shape[0][0],shape[0][1]);
-	    ctx.closePath();
-	    ctx.fill();
-	    ctx.stroke();
-	};
-
-	function translateShape(shape,x,y) {
-	    var rv = [];
-	    for(p in shape)
-	        rv.push([ shape[p][0] + x, shape[p][1] + y ]);
-	    return rv;
-	};
-
-	function rotateShape(shape,ang)
-	{
-	    var rv = [];
-	    for(p in shape)
-	        rv.push(rotatePoint(ang,shape[p][0],shape[p][1]));
-	    return rv;
-	};
-	function rotatePoint(ang,x,y) {
-	    return [
-	        (x * Math.cos(ang)) - (y * Math.sin(ang)),
-	        (x * Math.sin(ang)) + (y * Math.cos(ang))
-	    ];
-	};
-
-	function drawLineArrow(ctx, x1,y1,x2,y2) {
-	    ctx.beginPath();
-	    ctx.moveTo(x1,y1);
-	    ctx.lineTo(x2,y2);
-	    ctx.closePath();
-	    ctx.stroke();
-	    var ang = Math.atan2(y2-y1,x2-x1);
-	    drawFilledPolygon(ctx, translateShape(rotateShape(arrow,ang),x2,y2));
-	};
-
-
-	/**
-	 * From: http://js-bits.blogspot.co.uk/2010/07/canvas-rounded-corner-rectangles.html
-	 * Draws a rounded rectangle using the current state of the canvas. 
-	 * If you omit the last three params, it will draw a rectangle 
-	 * outline with a 5 pixel border radius 
-	 * @param {CanvasRenderingContext2D} ctx
-	 * @param {Number} x The top left x coordinate
-	 * @param {Number} y The top left y coordinate 
-	 * @param {Number} width The width of the rectangle 
-	 * @param {Number} height The height of the rectangle
-	 * @param {Number} radius The corner radius. Defaults to 5;
-	 * @param {Boolean} fill Whether to fill the rectangle. Defaults to false.
-	 * @param {Boolean} stroke Whether to stroke the rectangle. Defaults to true.
-	 */
-	function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-	  if (typeof stroke == "undefined" ) {
-	    stroke = true;
-	  }
-	  if (typeof radius === "undefined") {
-	    radius = 5;
-	  }
-	  ctx.beginPath();
-	  ctx.moveTo(x + radius, y);
-	  ctx.lineTo(x + width - radius, y);
-	  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-	  ctx.lineTo(x + width, y + height - radius);
-	  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-	  ctx.lineTo(x + radius, y + height);
-	  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-	  ctx.lineTo(x, y + radius);
-	  ctx.quadraticCurveTo(x, y, x + radius, y);
-	  ctx.closePath();
-	  if (stroke) {
-	    ctx.stroke();
-	  }
-	  if (fill) {
-	    ctx.fill();
-	  }        
-	};
-
-	// From http://stackoverflow.com/questions/7054272/how-to-draw-smooth-curve-through-n-points-using-javascript-html5-canvas
 	
-	function getCurvePoints(ptsa, tension, isClosed, numOfSegments) {
 
-	    // use input value if provided, or use a default value   
-	    tension = (typeof tension != 'undefined') ? tension : 0.5;
-	    isClosed = isClosed ? isClosed : false;
-	    numOfSegments = numOfSegments ? numOfSegments : 16;
+	// Library functions, taken off the net, or by me
+	var libs = createPictJsLibs();
+	var roundRect = libs.roundRect
+	var drawCurve = libs.drawCurve;
+	var drawArrow = libs.drawArrow;
+	var drawLineArrow = libs.drawLineArrow;
+	var logger = libs.logger;
 
-	    var _pts = [], res = [],    // clone array
-	        x, y,           // our x,y coords
-	        t1x, t2x, t1y, t2y, // tension vectors
-	        c1, c2, c3, c4,     // cardinal points
-	        st, t, i;       // steps based on num. of segments
-
-	    // clone array so we don't change the original
-	    _pts = ptsa.slice(0);
-
-	    // The algorithm require a previous and next point to the actual point array.
-	    // Check if we will draw closed or open curve.
-	    // If closed, copy end points to beginning and first points to end
-	    // If open, duplicate first points to befinning, end points to end
-	    if (isClosed) {
-	        _pts.unshift(ptsa[ptsa.length - 1]);
-	        _pts.unshift(ptsa[ptsa.length - 2]);
-	        _pts.unshift(ptsa[ptsa.length - 1]);
-	        _pts.unshift(ptsa[ptsa.length - 2]);
-	        _pts.push(ptsa[0]);
-	        _pts.push(ptsa[1]);
-	    }
-	    else {
-	        _pts.unshift(ptsa[1]);   //copy 1. point and insert at beginning
-	        _pts.unshift(ptsa[0]);
-	        _pts.push(ptsa[ptsa.length - 2]); //copy last point and append
-	        _pts.push(ptsa[ptsa.length - 1]);
-	    }
-
-	    // ok, lets start..
-
-	    // 1. loop goes through point array
-	    // 2. loop goes through each segment between the 2 pts + 1e point before and after
-	    for (i=2; i < (_pts.length - 4); i+=2) {
-	        for (t=0; t <= numOfSegments; t++) {
-
-	            // calc tension vectors
-	            t1x = (_pts[i+2] - _pts[i-2]) * tension;
-	            t2x = (_pts[i+4] - _pts[i]) * tension;
-
-	            t1y = (_pts[i+3] - _pts[i-1]) * tension;
-	            t2y = (_pts[i+5] - _pts[i+1]) * tension;
-
-	            // calc step
-	            st = t / numOfSegments;
-
-	            // calc cardinals
-	            c1 =   2 * Math.pow(st, 3)  - 3 * Math.pow(st, 2) + 1; 
-	            c2 = -(2 * Math.pow(st, 3)) + 3 * Math.pow(st, 2); 
-	            c3 =       Math.pow(st, 3)  - 2 * Math.pow(st, 2) + st; 
-	            c4 =       Math.pow(st, 3)  -     Math.pow(st, 2);
-
-	            // calc x and y cords with common control vectors
-	            x = c1 * _pts[i]    + c2 * _pts[i+2] + c3 * t1x + c4 * t2x;
-	            y = c1 * _pts[i+1]  + c2 * _pts[i+3] + c3 * t1y + c4 * t2y;
-
-	            //store points in array
-	            res.push(x);
-	            res.push(y);
-
-	        }
-	    }
-
-	    return res;
-	};
-
-	function drawLinesForCurve(ctx, pts) {
-	    ctx.moveTo(pts[0], pts[1]);
-	    for(i=2;i<pts.length-1;i+=2) ctx.lineTo(pts[i], pts[i+1]);
-	};
-
-	function drawCurve(ctx, ptsa, tension, isClosed, numOfSegments, showPoints) {
-	    showPoints  = showPoints ? showPoints : true;
-
-	    ctx.beginPath();
-
-	    console.log('Drawing curve');
-	    drawLinesForCurve(ctx, getCurvePoints(ptsa, tension, isClosed, numOfSegments));
-
-	    if (showPoints) {
-	        ctx.stroke();
-	        ctx.beginPath();
-	        for(var i=0;i<ptsa.length-1;i+=2) 
-	                ctx.rect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
-	    }
-	};
-
-
-
-	//--- End Library functions, taken off the net
-	//-----------------------------------------------
-
+	// Generic functions
 	function forEach(array, action) {
 	  for (var i = 0; i < array.length; i++)
 	    action(array[i]);
@@ -227,30 +50,42 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		};
 	};
 
-	var that = {};
 
-	that.structure = {};
-	that.layout = {};
-
-
-	var canvas = document.getElementById(canvasId);
-	var ctx = canvas.getContext("2d");
-
+	// Functions to find shapes etc
 	function getShapePos(shape) {
+		return getShapeIdPos(shape.id);
+	};
+
+	function getShapeIdPos(shapeId) {
 		var x = 0;
 		var y = 0;
 		var w = 200;
 		var h = 100;
-		if ( that.layout ) {
-			var layout = find(that.layout, withId(shape.id));
-			if ( layout ) {
-				x = layout.x || 0;
-				y = layout.y || 0;				
-			}
+		var layout = find(that.layout, withId(shapeId));
+		if ( layout ) {
+			x = layout.x || 0;
+			y = layout.y || 0;				
 		}
 		var pos = {"x": x, "y": y, "w":w, "h":h};
 		return pos;
 	};
+
+	function getShapeLayout(shape) {
+		var layout = find(that.layout, withId(shape.id))
+		if ( typeof(layout) == 'undefined' ) {
+			layout = {"id": shape.id, "x":0, "y":0};
+			that.layout.push(layout);
+		}
+		return layout;
+	};
+
+	function findShapeLayout(shape) {
+		return find(that.layout, withId(shape.id));
+	}
+
+	function findLink(linksTo, linkId) {
+		return find(linksTo, withId(linkId));
+	}
 
 	function isPosInside(pos, shapePos) {
 		if ( pos.x >= shapePos.x && pos.x <= shapePos.x+shapePos.w &&
@@ -273,63 +108,89 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		return found;
 	}
 	
-	/**
-	* Clears the canvas.
-	*/
+
+	var canvas = document.getElementById(canvasId);
+	var ctx = canvas.getContext("2d");
+
+
 	function clearCanvas()
 	{
 		ctx.clearRect(0, 0, canvas.width, canvas.height);
 	};
 
+	function styleFrom(pos, style, reason) {
+		if ( style ) {
+			if ( typeof(style) == 'string' ) {
+				return style;
+			} else {
+				if ( style.type == 'verticalGradient' ) {
+					// Create a gradient
+					var grd = ctx.createLinearGradient(pos.x,pos.y,pos.x,pos.y+pos.h);
+					grd.addColorStop(0, style.color1);
+					grd.addColorStop(1, style.color2);
+					return grd;
+				} else {
+					return 'black';
+				}
+			}
+		} else {
+			if ( reason == 'font' ) {
+				return 'black';
+			} else {
+				// Create a gradient
+				var grd = ctx.createLinearGradient(pos.x,pos.y,pos.x,pos.y+pos.h);
+				grd.addColorStop(0,"red");
+				grd.addColorStop(1,"white");
+				return grd;
+			}
+		}
+	}
+
+	function setStyles(pos, shape) {
+		ctx.strokeStyle = shape.fgColor || 'black';
+		ctx.fillStyle = styleFrom(pos, shape.bgColor);
+	}
+
+	function mergedShape(shape) {
+		if ( shape.classes ) {
+			var index = 0;
+			while ( index < shape.classes.length ) {
+				var cls = shape.classes[index];
+				shape = $.extend(true, {}, shape, that.classes[cls]);
+				index = index + 1;
+			}
+		}
+		return shape;
+	}
+	
 	function drawShape(shape) {
+		shape = mergedShape(shape);
 		var pos = getShapePos(shape);
 
-		// Create a gradient
-		var grd = ctx.createLinearGradient(pos.x,pos.y,pos.x,pos.y+pos.h);
-		grd.addColorStop(0,"red");
-		grd.addColorStop(1,"white");
+		ctx.strokeStyle = shape.fgColor || 'black';
+		ctx.fillStyle = styleFrom(pos, shape.bgColor, 'shape');
 
-		// Fill rect with gradient
-		ctx.fillStyle = grd;
 		ctx.fillRect(pos.x,pos.y,pos.w,pos.h);
+		// Draw a rect
+		//		ctx.strokeStyle="#FF0000";
+		ctx.strokeRect(pos.x,pos.y,pos.w,pos.h);
 
 		// roundRect(ctx, 200,10,100,80,5, true, true);
 
-		// Draw a rect
-		ctx.strokeStyle="#FF0000";
-		ctx.strokeRect(pos.x,pos.y,pos.w,pos.h);
-
-		// // Draw a line
-	 //    ctx.beginPath();
-		// ctx.moveTo(0,0);
-		// ctx.lineTo(200,100);
-		// ctx.stroke();
-
 		// Line with an arrow head
-		ctx.fillStyle='red';
-		ctx.strokeStyle='red';
-		drawLineArrow(ctx, 30,60, 90,120);
+		//		drawLineArrow(ctx, 30,60, 90,120);
 
 		// Draw some text
-		ctx.fillStyle='black';
+		ctx.fillStyle = styleFrom(pos, shape.fontColor, 'font');
 		ctx.font = "30px Arial";
 		var label = shape.label || shape.id;
 		ctx.fillText(label,pos.x+4,pos.y+30+4);
 
-		// Draw a curvy line
-		ctx.strokeStyle="black";
-		var myPoints = [10,10, 40,30, 100,10, 100,50]; //minimum two points
-		var tension = 0.5;
-
-		drawCurve(ctx, myPoints); //default tension=0.5
-		//drawCurve(ctx, myPoints, tension);
-		ctx.stroke();
-
 		// // Underline the text, by knowing how wide it is, note font is 30px, so is 30 high
 		// var m = ctx.measureText(label);
 		// ctx.strokeStyle="blue";
- 	// 	ctx.beginPath();
-  //  		ctx.moveTo(10,50);
+ 		// 	ctx.beginPath();
+		//  		ctx.moveTo(10,50);
 		// ctx.lineTo(10+m.width, 50);
 		// ctx.stroke();
 	}
@@ -338,7 +199,6 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		if ( that.structure.shapes ) {
 			var len = that.structure.shapes.length
 			var index = 0;
-			console.log('drawing '+len+' boxes');
 			while (index < len) {
 				drawShape(that.structure.shapes[index]);
 				index = index + 1;
@@ -346,8 +206,91 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		}
 	}
 
+	function getLineEndPoint(link) {
+		var toPos = getShapeIdPos(link.dest);
+		return toPos;
+	}
+
+	function drawLine(fromShape, link) {
+		var fromPos = getShapePos(fromShape);
+		var toPos = getLineEndPoint(link);
+
+		if ( link.type == 'curve4' ) {
+			// Draw a curvy line
+			ctx.strokeStyle="black";
+			var pt2 = link.pt2 || { 'x': 40, 'y': 30 };
+			var pt3 = link.pt3 || { 'x': 40, 'y': 30 };
+			var myPoints;
+			if ( pt2 != pt3 ) {
+				myPoints = [fromPos.x, fromPos.y,
+				 pt2.x, pt2.y,
+				 pt3.x, pt3.y,
+				 toPos.x, toPos.y];
+			} else {
+				myPoints = [fromPos.x, fromPos.y,
+				 pt2.x, pt2.y,
+				 toPos.x, toPos.y];
+			};
+			var tension = 0.5;
+			drawCurve(ctx, myPoints); //default tension=0.5
+			//drawCurve(ctx, myPoints, tension);
+			ctx.stroke();
+			// Put an arrow on the end?
+			if ( link.end == 'arrow' ) {
+				var last2Pts = myPoints.slice(-4);
+				logger.debug('Drawing arrow on end of curve4 at '+JSON.stringify(last2Pts));
+				drawArrow(ctx, last2Pts[0], last2Pts[1], last2Pts[2], last2Pts[3]);
+			}
+		} else {
+
+			// Default to 'straight'
+			if ( link.end == 'arrow' ) {
+				drawLineArrow(ctx, fromPos.x, fromPos.y,  toPos.x, toPos.y);
+			} else {		
+				// Draw a line
+				ctx.beginPath();
+				ctx.moveTo(fromPos.x, fromPos.y);
+				ctx.lineTo(toPos.x, toPos.y);
+				ctx.stroke();
+			}
+		}
+	}
+
+	function mergedLink(shape, link) {
+		var layout = findShapeLayout(shape);
+		if ( layout && layout.linksTo ) {
+			logger.debug('Looking for '+JSON.stringify(link)+' Found layout for shape '+shape.id+' of '+JSON.stringify(layout));
+			var found = findLink(layout.linksTo, link.id);
+			if ( found ) {
+				logger.debug('Found link in linksTo of '+JSON.stringify(found));
+				// The true means deep extend, the {} means that we don't actually change link, but clone it into {}
+				link = $.extend(true, {}, link, found);
+				//link.pt2 = found.pt2 || link.pt2;
+				//link.pt3 = found.pt3 || link.pt3;
+			}
+		}
+		return link;
+	}
+
 	function drawLines() {
-		
+		if ( that.structure.shapes ) {
+			var len = that.structure.shapes.length
+			var index = 0;
+			while (index < len) {
+				var shape = that.structure.shapes[index];
+				if ( shape.linksTo ) {
+					var linkIndex = 0;
+					while ( linkIndex < shape.linksTo.length ) {
+						var link = shape.linksTo[linkIndex];
+						link = mergedLink(shape, link);
+						logger.debug('Drawing merged link of '+JSON.stringify(link));
+						drawLine(shape, link);
+						linkIndex = linkIndex + 1;
+					}
+				}
+				index = index + 1;
+			}
+		}			
 	}
 
 	function drawLineLabels() {
@@ -356,8 +299,7 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 
 	function redraw()
 	{
-		console.log('in redraw');
-		// TODO: Make sure required resources are loaded before redrawing
+		// onsole.log('in redraw');
 		clearCanvas();
 
 		drawShapes();
@@ -374,21 +316,68 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 	    };
 	}
 
+	function doneAction() {
+		that.actions.push(that.currentAction);
+		if ( that.actions.length > 20 ) {
+			that.actions.shift();
+		}
+		that.currentAction = undefined;
+	};
+
+	function applyDraggingShape(action, pos) {
+		var layout = getShapeLayout(action.shape)
+		layout.x = pos.x - action.offsetPos.x;
+		layout.y = pos.y - action.offsetPos.y;
+		redraw();				
+	}
+
+	function mouseDragForCurrentAction(pos) {
+		if ( that.currentAction ) {
+			var action = that.currentAction;
+
+			if ( action.action == 'draggingShape' ) {
+				applyDraggingShape(action, pos);
+			}
+		}
+	}
+
+	function mouseUpForCurrentAction(pos) {
+		if ( that.currentAction ) {
+			var action = that.currentAction;
+
+			if ( action.action == 'draggingShape' ) {
+				applyDraggingShape(action, pos);
+				doneAction();
+			} else {
+				logger.error("Unknown action type: "+action.action);
+			}
+		}
+	};
+
 	var isMouseDown = false;
-	var downPos = undefined;
-	var draggingShape = undefined;
 
 	$(canvas).mousedown(function(e) {
 		// Only respond to left button
 		if ( e.which == 1 ) {
 			isMouseDown = true;
 			var pos = getMousePos(canvas, e);
-			downPos = pos;
 
 			console.log('Down at '+pos.x+', '+pos.y);
-			draggingShape = findShapeAt(pos);
+			var draggingShape = findShapeAt(pos);
 			if ( draggingShape ) {
-				console.log('Down on shape '+draggingShape.id);
+				//onsole.log('Down on shape '+draggingShape.id);
+				var shapePos = getShapePos(draggingShape);
+				var offsetPos = {
+					'x': pos.x-shapePos.x,
+					'y': pos.y-shapePos.y
+				};
+				that.currentAction = { 
+					'action': 'draggingShape',
+					'shape': draggingShape,
+					'offsetPos': offsetPos 
+				};
+			} else {
+				that.currentAction = undefined;
 			}
 		}
 	});
@@ -396,10 +385,11 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 	$(canvas).mousemove(function(e) {
 		if ( isMouseDown ) {
 			var pos = getMousePos(canvas, e);
-			//console.log('Drag at '+pos.x+', '+pos.y);
+			mouseDragForCurrentAction(pos);
+			//onsole.log('Drag at '+pos.x+', '+pos.y);
 		} else {
 			// var pos = getMousePos(canvas, e);
-			// console.log('Move at '+pos.x+', '+pos.y);
+			//onsole.log('Move at '+pos.x+', '+pos.y);
 		}
 	});
 
@@ -407,23 +397,40 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 		if ( isMouseDown ) {
 			isMouseDown = false;
 			var pos = getMousePos(canvas, e);
-			console.log('Released at '+pos.x+', '+pos.y);
-			if ( draggingShape ) {
-				var layout = find(that.layout, withId(draggingShape.id))
-				if ( typeof(layout) == 'undefined' ) {
-					layout = {"id": draggingShape.id, "x":0, "y":0};
-					console.log('No layout found');
-				}
-				console.log('Updating layout for '+draggingShape.id);
-				layout.x = layout.x + pos.x-downPos.x;
-				layout.y = layout.y + pos.y-downPos.y;
-				that.layout.push(layout);
-				redraw();
-			} else {
-				console.log('Not dragging');
+			if ( that.currentAction ) {
+				mouseUpForCurrentAction(pos);
 			}
 		}
 	});
+
+	function fixLinksTo(shape) {
+		if ( shape.linksTo ) {
+			logger.info('Fixing linksTo of '+JSON.stringify(shape.linksTo));
+			var index = 0;
+			while ( index < shape.linksTo.length ) {
+				var link = shape.linksTo[index];
+				logger.info('Fixing link of '+JSON.stringify(link));
+				if ( typeof(link) == 'string' ) {
+					link = { 'id': link, 'dest': link, 'type': 'straight' };
+					shape.linksTo[index] = link;
+				}
+				if ( typeof(link.id) == 'undefined' ) {
+					link.id = link.dest;
+				}
+				
+				index = index + 1;
+			}
+		}
+	}
+
+	function fixStructure() {
+		var index = 0;
+		while ( index < that.structure.shapes.length ) {
+			var shape = that.structure.shapes[index];
+			fixLinksTo(shape);
+			index = index +1;
+		}
+	}
 
 	// Read the structureFile and layoutFile into structure and layout
 	console.log('Loading '+structureFile);
@@ -431,6 +438,7 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 	$.getJSON( structureFile)
 	    .done(function(data) {
 	    	that.structure = data;
+			fixStructure();
 	    	console.log('Updating structure to '+JSON.stringify(that.structure));
 	    	redraw();
 	    })
@@ -442,13 +450,26 @@ var PictJS = function(canvasId, structureFile, layoutFile) {
 	    	redraw();
 	    });
 
+	$.getJSON( classesFile)
+	    .done(function( data ) {
+	    	that.classes = data;
+	    	redraw();
+	    });
+
 	dave=that;
-	console.log('Set dave');
+
+	function showLayout() {
+		var json = JSON.stringify(that.layout);
+		return json;
+	}
+
+	that.showLayout = showLayout;
+
 	that;
 };
 
-function pictjs_at(canvasId, structureFile, layoutFile) {
-	var pictJS = PictJS(canvasId, structureFile, layoutFile)
+function pictjs_at(canvasId, structureFile, layoutFile, classesFile) {
+	var pictJS = PictJS(canvasId, structureFile, layoutFile, classesFile)
 };
 
 console.log('done');

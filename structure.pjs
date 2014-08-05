@@ -3,19 +3,24 @@
 		{
 			"id": "dave",
 			"shape": "rect",
-			"links-to": [
-				{ "id": "fred", "label": "friend" },
+			"fgColor": "blue",
+			"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "blue" },
+			"linksTo": [
+				{ "dest": "fred", "label": "friend", "end": "arrow" },
+				{ "dest": "bill", "type": "curve4", "end": "arrow" },
 				"jane"
 			]
 		},
 		{
-			"id": "fred"
+			"id": "fred",
+			"classes": ["green"]
 		},
 		{
 			"id": "jane"
 		},
 		{
-			"id": "bill"
+			"id": "bill",
+			"linksTo": [ { "dest": "jane", "end": "arrow" } ]
 		}
 	]
 }

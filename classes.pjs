@@ -1,5 +1,5 @@
-[
-	{
-	
+{
+	"green": {
+		"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "green" }
 	}
-]
+}
