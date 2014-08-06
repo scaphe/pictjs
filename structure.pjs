@@ -14,10 +14,11 @@
 		},
 		{
 			"id": "fred",
-			"classes": ["green"]
+			"classes": ["green", "fgYellow"]
 		},
 		{
-			"id": "jane"
+			"id": "jane",
+			"classes": ["green", "fgYellow"]
 		},
 		{
 			"id": "bill",

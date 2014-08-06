@@ -9,6 +9,7 @@ $.ajaxSetup({beforeSend: function(xhr){
 });
 
 var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
+	var Pt0 = { 'x': 0, 'y': 0 };
 	var that = {};
 
 	that.structure = {};
@@ -17,7 +18,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	that.actions = [];  // Undoable actions
 	that.currentAction = undefined;
 
-	
+
+	function s(x) { return JSON.stringify(x); }
 
 	// Library functions, taken off the net, or by me
 	var libs = createPictJsLibs();
@@ -87,6 +89,26 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return layout;
 	};
 
+	function getPointLayout(pt) {
+		var layout = find(that.layout.links, withId(pt.link.id))
+		var linkId = pt.link.id;
+		var ptName = pt.ptName;
+		if ( typeof(layout) == 'undefined' ) {
+			var initPt = { "x": 0, "y": 0 };
+			layout = { "id": linkId, 'src': pt.link.src, 'dest': pt.link.dest };
+			layout[ptName] = initPt;
+			logger.info('Creating point layout of '+JSON.stringify(layout));
+			that.layout.links.push(layout);
+		}
+		if ( typeof(layout[ptName]) == 'undefined' ) {
+			logger.info('Creating point for '+ptName+' for pt '+s(pt));
+			layout[ptName] = { 'x': 0, 'y': 0 };
+		}
+		var ans = layout[ptName];
+		logger.info('Found point layout '+ptName+' ans of '+s(ans)+' from layout of '+s(layout)+' for pt '+s(pt));
+		return ans;
+	};
+
 	function findShapeLayout(shape) {
 		return find(that.layout.shapes, withId(shape.id));
 	}
@@ -116,24 +138,46 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return found;
 	}
 
+	function isSrcPoint(ptName) {
+		return ptName == 'srcPt' || ptName == 'pt2';
+	}
+
+	function absolutePtCoords(link, ptName, pt) {
+		var shapePos = undefined;
+		if ( isSrcPoint(ptName) ) {
+			shapePos = getShapeIdPos(link.src);
+		} else {
+			shapePos = getShapeIdPos(link.dest);
+		}
+		//logger.info('AbsCoords for '+s(pt)+' using '+s(shapePos));
+		return { 'x': shapePos.x+pt.x, 'y': shapePos.y+pt.y };
+	}
+
 	function findPointAt(pos) {
 		var found = undefined;
-		function checkPoint(pt) {
-			if ( pos.x >= pt.x-r && pos.x <= pt.x+r &&
-				 pos.y >= pt.y-r && pos.y <= pt.y+r ) {
-				found = found || pt;
+		function checkPoint(link, ptName, pt) {
+			var r = 4;
+			if ( pt ) {
+				apt = absolutePtCoords(link, ptName, pt);
+				if ( pos.x >= apt.x-r && pos.x <= apt.x+r &&
+					 pos.y >= apt.y-r && pos.y <= apt.y+r ) {
+					found = found || { 'link': link, 'ptName': ptName, 'pt': pt };
+					logger.info('Found pt of '+JSON.stringify(found));
+				}
 			}
 		}
-		forEach(that.structure,links, function (link) {
+		forEach(that.structure.links, function (link) {
 			link = mergedLink(link);
+			checkPoint(link, 'srcPt', link.srcPt || Pt0);
+			checkPoint(link, 'destPt', link.destPt || Pt0);
 			if ( link.type == 'curve4' ) {
-				checkPoint(link.pt3);
-				checkPoint(link.pt2);
+				checkPoint(link, 'pt3', link.pt3);
+				checkPoint(link, 'pt2', link.pt2);
 			}
 		});
 		return found;
 	}
-	
+
 
 	var canvas = document.getElementById(canvasId);
 	var ctx = canvas.getContext("2d");
@@ -182,8 +226,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var index = 0;
 			while ( index < shape.classes.length ) {
 				var cls = shape.classes[index];
-				logger.info('Applying class of '+cls+' to '+JSON.stringify(shape));
-				shape = $.extend(true, {}, shape, that.classes[cls]);
+				var clsDef = that.classes[cls];
+				shape = $.extend(true, {}, shape, clsDef);
+				logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
 				index = index + 1;
 			}
 		}
@@ -201,7 +246,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	}
 	
 	function drawShape(shape) {
-		shape = applyClasses(shape);
 		var pos = getShapePos(shape);
 
 		ctx.strokeStyle = shape.fgColor || 'black';
@@ -253,25 +297,30 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	}
 
 	function drawLink(link) {
-		link = applyClasses(link);
 		var fromPos = getShapeIdPos(link.src);
 		var toPos = getShapeIdPos(link.dest);
+		var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt || { 'x': 0, 'y': 0 });
+		var destPt = absolutePtCoords(link, 'destPt', link.destPt || { 'x': 0, 'y': 0 });
 
 		if ( link.type == 'curve4' ) {
 			// Draw a curvy line
 			ctx.strokeStyle="black";
-			var pt2 = link.pt2 || { 'x': 40, 'y': 30 };
-			var pt3 = link.pt3 || { 'x': 40, 'y': 30 };
+			var pt2 = absolutePtCoords(link, 'pt2', link.pt2 || { 'x': 40, 'y': 30 });
+			var pt3 = absolutePtCoords(link, 'pt3', link.pt3 || { 'x': 40, 'y': 30 });
 			var myPoints;
 			if ( pt2 != pt3 ) {
-				myPoints = [fromPos.x, fromPos.y,
-				 pt2.x, pt2.y,
-				 pt3.x, pt3.y,
-				 toPos.x, toPos.y];
+				myPoints = [
+					srcPt.x, srcPt.y,
+					pt2.x, pt2.y,
+					pt3.x, pt3.y,
+					destPt.x, destPt.y
+				];
 			} else {
-				myPoints = [fromPos.x, fromPos.y,
-				 pt2.x, pt2.y,
-				 toPos.x, toPos.y];
+				myPoints = [
+					srcPt.x, srcPt.y,
+					pt2.x, pt2.y,
+					destPt.x, destPt.y
+				];
 			};
 			var tension = 0.5;
 			drawCurve(ctx, myPoints); //default tension=0.5
@@ -287,12 +336,12 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 			// Default to 'straight'
 			if ( link.end == 'arrow' ) {
-				drawLineArrow(ctx, fromPos.x, fromPos.y,  toPos.x, toPos.y);
+				drawLineArrow(ctx, srcPt.x, srcPt.y,  destPt.x, destPt.y);
 			} else {		
 				// Draw a line
 				ctx.beginPath();
-				ctx.moveTo(fromPos.x, fromPos.y);
-				ctx.lineTo(toPos.x, toPos.y);
+				ctx.moveTo(srcPt.x, srcPt.y);
+				ctx.lineTo(destPt.x, destPt.y);
 				ctx.stroke();
 			}
 		}
@@ -362,12 +411,23 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		redraw();				
 	}
 
+	function applyDraggingPoint(action, pos) {
+		var layout = getPointLayout(action.pt)
+		logger.info('Got point layout of '+s(layout)+' and action of '+s(action));
+		layout.x = pos.x - action.offsetPos.x;
+		layout.y = pos.y - action.offsetPos.y;
+		redraw();
+	}
+
 	function mouseDragForCurrentAction(pos) {
 		if ( that.currentAction ) {
 			var action = that.currentAction;
 
 			if ( action.action == 'draggingShape' ) {
 				applyDraggingShape(action, pos);
+
+			} else if ( action.action == 'draggingPoint' ) {
+				applyDraggingPoint(action, pos);
 			}
 		}
 	}
@@ -379,6 +439,12 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			if ( action.action == 'draggingShape' ) {
 				applyDraggingShape(action, pos);
 				doneAction();
+
+			} else if ( action.action == 'draggingPoint' ) {
+				logger.info('Applying draggingPoint');
+				applyDraggingPoint(action, pos);
+				doneAction();
+
 			} else {
 				logger.error("Unknown action type: "+action.action);
 			}
@@ -395,7 +461,22 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 			console.log('Down at '+pos.x+', '+pos.y);
 			var draggingShape = findShapeAt(pos);
-			if ( draggingShape ) {
+			var draggingPoint = findPointAt(pos);
+			if ( false ) {
+
+			} else if ( draggingPoint ) {
+				logger.info('Dragging point '+s(draggingPoint));
+				var offsetPos = {
+					'x': pos.x-draggingPoint.pt.x,
+					'y': pos.y-draggingPoint.pt.y
+				};
+				that.currentAction = {
+					'action': 'draggingPoint',
+					'pt': draggingPoint,
+					'offsetPos': offsetPos
+				};
+
+			} else if ( draggingShape ) {
 				//onsole.log('Down on shape '+draggingShape.id);
 				var shapePos = getShapePos(draggingShape);
 				var offsetPos = {
@@ -408,21 +489,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 					'offsetPos': offsetPos 
 				};
 			} else {
-				var draggingPoint = findPointAt(pos);
-				if ( draggingPoint ) {
-					var pointPos = getPointPos(draggingPoint);
-					var offsetPos = {
-						'x': pos.x-pointPos.x,
-						'y': pos.y-pointPos.y
-					};
-					that.currentAction = {
-						'action': 'draggingPoint',
-						'point': draggingPoint,
-						'offsetPos': offsetPos
-					};
-				} else {
-					that.currentAction = undefined;
-				}
+				that.currentAction = undefined;
 			}
 		}
 	});
@@ -472,55 +539,96 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		var index = 0;
 		while ( index < that.structure.links.length ) {
 			var link = that.structure.links[index];
-			logger.info('Fixing link of '+JSON.stringify(link));
 			if ( typeof(link.id) == 'undefined' ) {
 				link.id = link.src+'-'+link.dest;
 			}
+			link = applyClasses(link);
+			that.structure.links[index] = link;
+			logger.info('Fixed link to '+JSON.stringify(link));
 			
 			index = index + 1;
 		}
 	}
 
-	function fixStructure() {
+	function fixLayout() {
 		var index = 0;
-		while ( index < that.structure.shapes.length ) {
-			var shape = that.structure.shapes[index];
-			fixLinksTo(shape);
-			index = index +1;
+		while ( index < that.layout.shapes.length ) {
+			var shape = that.layout.shapes[index];
+			that.layout.shapes[index] = shape;
+			logger.info('Fixed layout shape to '+JSON.stringify(shape));
+			index = index + 1;
 		}
-		fixLinks();
+
+		index = 0;
+		while ( index < that.layout.links.length ) {
+			var link = that.layout.links[index];
+			if ( typeof(link.id) == 'undefined' ) {
+				link.id = link.src+'-'+link.dest;
+			}
+			that.layout.links[index] = link;
+			logger.info('Fixed layout link to '+JSON.stringify(link));
+			index = index + 1;
+		}
 	}
 
 	// Read the structureFile and layoutFile into structure and layout
 	console.log('Loading '+structureFile);
 
+	var loadedStructure = false;
+	var loadedLayout = false;
+	var loadedClasses = false;
+
+
+	function fixStructure() {
+		if ( loadedStructure && loadedLayout && loadedClasses ) {
+			var index = 0;
+			while ( index < that.structure.shapes.length ) {
+				var shape = that.structure.shapes[index];
+				fixLinksTo(shape);
+				shape = applyClasses(shape);
+				that.structure.shapes[index] = shape;
+				index = index +1;
+			}
+			fixLinks();
+			fixLayout();
+			daveS = that.structure;
+			//	    	console.log('Updating structure to '+JSON.stringify(that.structure, undefined, 2));
+			redraw();
+		}
+	}
+
 	$.getJSON( structureFile)
 	    .done(function(data) {
 	    	that.structure = data;
+			loadedStructure = true;
 			fixStructure();
-			daveS = that.structure;
-//	    	console.log('Updating structure to '+JSON.stringify(that.structure, undefined, 2));
-	    	redraw();
+			logger.info('Loaded structure');
 	    })
 	     .error(function() { alert("error"); });
 
 	$.getJSON( layoutFile)
 	    .done(function( data ) {
 	    	that.layout = data;
+			loadedLayout = true;
+			logger.info('Loaded layout');
 			//logger.info('Got layout of '+JSON.stringify(data));
+			fixStructure();
 	    	redraw();
 	    });
 
 	$.getJSON( classesFile)
 	    .done(function( data ) {
 	    	that.classes = data;
+			loadedClasses = true;
+			logger.info('Loaded classes');
+			fixStructure();
 	    	redraw();
 	    });
 
 	dave=that;
 
 	function showLayout() {
-		var json = JSON.stringify(that.layout);
+		var json = JSON.stringify(that.layout, undefined, 2);
 		return json;
 	}
 
