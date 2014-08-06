@@ -3,11 +3,12 @@
 		{
 			"id": "dave",
 			"shape": "rect",
+			"font": { "px": 20, "fontName": "Arial" },
+			"fontColor": "#ff8800",
 			"fgColor": "blue",
 			"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "blue" },
 			"linksTo": [
 				{ "dest": "fred", "label": "friend", "end": "arrow" },
-				{ "dest": "bill", "type": "curve4", "end": "arrow" },
 				"jane"
 			]
 		},
@@ -22,5 +23,13 @@
 			"id": "bill",
 			"linksTo": [ { "dest": "jane", "end": "arrow" } ]
 		}
+	],
+
+	"links": [
+		 {
+			"src": "dave",
+			"dest": "bill",
+			"classes": ["curved"]
+		 }
 	]
 }

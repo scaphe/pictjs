@@ -12,7 +12,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var that = {};
 
 	that.structure = {};
-	that.layout = [];
+	that.layout = {};
 	that.classes = {};
 	that.actions = [];  // Undoable actions
 	that.currentAction = undefined;
@@ -35,12 +35,14 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	function find(array, matcher) {
 		var found = undefined;
-		for (var i = 0; i < array.length; i++) {
-			if ( matcher(array[i]) ) {
-				found = array[i];
-				break;
-			}
-		};
+		if ( array ) {
+			for (var i = 0; i < array.length; i++) {
+				if ( matcher(array[i]) ) {
+					found = array[i];
+					break;
+				}
+			};
+		}
 		return found;
 	};
 
@@ -49,6 +51,12 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			return thing.id == id;
 		};
 	};
+
+	function matchingLink(link) {
+		return function(thing) {
+			return thing.dest == link.dest && thing.src == link.src;
+		};
+	}
 
 
 	// Functions to find shapes etc
@@ -61,7 +69,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		var y = 0;
 		var w = 200;
 		var h = 100;
-		var layout = find(that.layout, withId(shapeId));
+		var layout = find(that.layout.shapes, withId(shapeId));
 		if ( layout ) {
 			x = layout.x || 0;
 			y = layout.y || 0;				
@@ -71,20 +79,20 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	};
 
 	function getShapeLayout(shape) {
-		var layout = find(that.layout, withId(shape.id))
+		var layout = find(that.layout.shapes, withId(shape.id))
 		if ( typeof(layout) == 'undefined' ) {
 			layout = {"id": shape.id, "x":0, "y":0};
-			that.layout.push(layout);
+			that.layout.shapes.push(layout);
 		}
 		return layout;
 	};
 
 	function findShapeLayout(shape) {
-		return find(that.layout, withId(shape.id));
+		return find(that.layout.shapes, withId(shape.id));
 	}
 
-	function findLink(linksTo, linkId) {
-		return find(linksTo, withId(linkId));
+	function findLink(links, link) {
+		return find(links, matchingLink(link));
 	}
 
 	function isPosInside(pos, shapePos) {
@@ -105,6 +113,24 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			}
 		}
 		forEach(that.structure.shapes, matchShape);
+		return found;
+	}
+
+	function findPointAt(pos) {
+		var found = undefined;
+		function checkPoint(pt) {
+			if ( pos.x >= pt.x-r && pos.x <= pt.x+r &&
+				 pos.y >= pt.y-r && pos.y <= pt.y+r ) {
+				found = found || pt;
+			}
+		}
+		forEach(that.structure,links, function (link) {
+			link = mergedLink(link);
+			if ( link.type == 'curve4' ) {
+				checkPoint(link.pt3);
+				checkPoint(link.pt2);
+			}
+		});
 		return found;
 	}
 	
@@ -151,20 +177,31 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		ctx.fillStyle = styleFrom(pos, shape.bgColor);
 	}
 
-	function mergedShape(shape) {
+	function applyClasses(shape) {
 		if ( shape.classes ) {
 			var index = 0;
 			while ( index < shape.classes.length ) {
 				var cls = shape.classes[index];
+				logger.info('Applying class of '+cls+' to '+JSON.stringify(shape));
 				shape = $.extend(true, {}, shape, that.classes[cls]);
 				index = index + 1;
 			}
 		}
 		return shape;
 	}
+
+	function fontFrom(fontData) {
+		if ( fontData ) {
+			var px = fontData.px || 20;
+			var name = fontData.fontName || 'Arial';
+			return { 'px': px, 'name': name, font: px+'px '+name };
+		} else {
+			return { 'px': 30, 'name': 'Arial', font: '30px Arial' };
+		}
+	}
 	
 	function drawShape(shape) {
-		shape = mergedShape(shape);
+		shape = applyClasses(shape);
 		var pos = getShapePos(shape);
 
 		ctx.strokeStyle = shape.fgColor || 'black';
@@ -182,12 +219,21 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 		// Draw some text
 		ctx.fillStyle = styleFrom(pos, shape.fontColor, 'font');
-		ctx.font = "30px Arial";
+		var fontData = fontFrom(shape.font);
+		ctx.font = fontData.font;
 		var label = shape.label || shape.id;
-		ctx.fillText(label,pos.x+4,pos.y+30+4);
+		var m = ctx.measureText(label);
+		var fontX = pos.x + 4;
+		if ( m.width < pos.w ) {
+			// Centre the text horizontally
+			fontX = pos.x + pos.w/2 - m.width/2;
+			//logger.info('On '+shape.id+' made fontX of '+fontX+' from '+pos.x+', '+pos.w+', m='+m.width);
+		}
+		var fontY = pos.y+fontData.px+4;
+		fontY = pos.y + pos.h/2 + fontData.px/2 - 4;
+		ctx.fillText(label, fontX, fontY);
 
 		// // Underline the text, by knowing how wide it is, note font is 30px, so is 30 high
-		// var m = ctx.measureText(label);
 		// ctx.strokeStyle="blue";
  		// 	ctx.beginPath();
 		//  		ctx.moveTo(10,50);
@@ -206,14 +252,10 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	}
 
-	function getLineEndPoint(link) {
+	function drawLink(link) {
+		link = applyClasses(link);
+		var fromPos = getShapeIdPos(link.src);
 		var toPos = getShapeIdPos(link.dest);
-		return toPos;
-	}
-
-	function drawLine(fromShape, link) {
-		var fromPos = getShapePos(fromShape);
-		var toPos = getLineEndPoint(link);
 
 		if ( link.type == 'curve4' ) {
 			// Draw a curvy line
@@ -256,44 +298,33 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	}
 
-	function mergedLink(shape, link) {
-		var layout = findShapeLayout(shape);
-		if ( layout && layout.linksTo ) {
-			logger.debug('Looking for '+JSON.stringify(link)+' Found layout for shape '+shape.id+' of '+JSON.stringify(layout));
-			var found = findLink(layout.linksTo, link.id);
-			if ( found ) {
-				logger.debug('Found link in linksTo of '+JSON.stringify(found));
-				// The true means deep extend, the {} means that we don't actually change link, but clone it into {}
-				link = $.extend(true, {}, link, found);
-				//link.pt2 = found.pt2 || link.pt2;
-				//link.pt3 = found.pt3 || link.pt3;
-			}
+	function mergedLink(link) {
+		var found = findLink(that.layout.links, link);
+		if ( found ) {
+			logger.debug('Found link in linksTo of '+JSON.stringify(found));
+			// The true means deep extend, the {} means that we don't actually change link, but clone it into {}
+			link = $.extend(true, {}, link, found);
+			//link.pt2 = found.pt2 || link.pt2;
+			//link.pt3 = found.pt3 || link.pt3;
 		}
 		return link;
 	}
 
-	function drawLines() {
+	function drawLinks() {
 		if ( that.structure.shapes ) {
-			var len = that.structure.shapes.length
+			var len = that.structure.links.length
 			var index = 0;
 			while (index < len) {
-				var shape = that.structure.shapes[index];
-				if ( shape.linksTo ) {
-					var linkIndex = 0;
-					while ( linkIndex < shape.linksTo.length ) {
-						var link = shape.linksTo[linkIndex];
-						link = mergedLink(shape, link);
-						logger.debug('Drawing merged link of '+JSON.stringify(link));
-						drawLine(shape, link);
-						linkIndex = linkIndex + 1;
-					}
-				}
+				var link = that.structure.links[index];
+				link = mergedLink(link);
+				logger.debug('Drawing merged link of '+JSON.stringify(link));
+				drawLink(link);
 				index = index + 1;
 			}
 		}			
 	}
 
-	function drawLineLabels() {
+	function drawLinkLabels() {
 		
 	}
 
@@ -303,8 +334,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		clearCanvas();
 
 		drawShapes();
-		drawLines();
-		drawLineLabels();
+		drawLinks();
+		drawLinkLabels();
 	};
 
 	// Hook up for events
@@ -377,7 +408,21 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 					'offsetPos': offsetPos 
 				};
 			} else {
-				that.currentAction = undefined;
+				var draggingPoint = findPointAt(pos);
+				if ( draggingPoint ) {
+					var pointPos = getPointPos(draggingPoint);
+					var offsetPos = {
+						'x': pos.x-pointPos.x,
+						'y': pos.y-pointPos.y
+					};
+					that.currentAction = {
+						'action': 'draggingPoint',
+						'point': draggingPoint,
+						'offsetPos': offsetPos
+					};
+				} else {
+					that.currentAction = undefined;
+				}
 			}
 		}
 	});
@@ -409,17 +454,30 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var index = 0;
 			while ( index < shape.linksTo.length ) {
 				var link = shape.linksTo[index];
-				logger.info('Fixing link of '+JSON.stringify(link));
+				//logger.info('Fixing link of '+JSON.stringify(link));
 				if ( typeof(link) == 'string' ) {
 					link = { 'id': link, 'dest': link, 'type': 'straight' };
-					shape.linksTo[index] = link;
+					//shape.linksTo[index] = link;
 				}
-				if ( typeof(link.id) == 'undefined' ) {
-					link.id = link.dest;
-				}
+				link.src = shape.id;
+				that.structure.links.push(link);
 				
 				index = index + 1;
 			}
+			delete shape.linksTo;
+		}
+	}
+
+	function fixLinks() {
+		var index = 0;
+		while ( index < that.structure.links.length ) {
+			var link = that.structure.links[index];
+			logger.info('Fixing link of '+JSON.stringify(link));
+			if ( typeof(link.id) == 'undefined' ) {
+				link.id = link.src+'-'+link.dest;
+			}
+			
+			index = index + 1;
 		}
 	}
 
@@ -430,6 +488,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			fixLinksTo(shape);
 			index = index +1;
 		}
+		fixLinks();
 	}
 
 	// Read the structureFile and layoutFile into structure and layout
@@ -439,7 +498,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	    .done(function(data) {
 	    	that.structure = data;
 			fixStructure();
-	    	console.log('Updating structure to '+JSON.stringify(that.structure));
+			daveS = that.structure;
+//	    	console.log('Updating structure to '+JSON.stringify(that.structure, undefined, 2));
 	    	redraw();
 	    })
 	     .error(function() { alert("error"); });
@@ -447,6 +507,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	$.getJSON( layoutFile)
 	    .done(function( data ) {
 	    	that.layout = data;
+			//logger.info('Got layout of '+JSON.stringify(data));
 	    	redraw();
 	    });
 

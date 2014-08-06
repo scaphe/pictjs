@@ -5,7 +5,6 @@ o   Different shape types (rounded box, circle, oval etc)
 o   Limit the start/end points for lines so they end at the edge of a box
 o   Labels on lines
 o   Font from config
-o   Fit text in box
 o   Auto size boxes to fit text
 o   Links to self
 o   Multiple links to self
@@ -14,6 +13,7 @@ o   Multiple links to given other
 
 
 DONE:
+ox Centre text in box
 ox Get curve points from the layout
 ox Curved lines, roughly ok arrow heads
 ox Colours for the boxes, from classes
