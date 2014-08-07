@@ -1,16 +1,17 @@
 TODO:
 o   Colours for the lines, from classes
-o   Limit the start/end points for lines so they end at the edge of a box
 o   Different shape types (rounded box, circle, oval etc)
-o   Labels on lines
 o   Auto size boxes to fit text
-o   Links to self
-o   Multiple links to self
 o   Multiple links to given other
 
 
 
 DONE:
+ox Labels on lines
+ox Links to self
+ox Multiple links to self
+ox Limit the start/end points for lines so they end at the edge of a box
+ox Mouse-over highlight shape under and possibly connections to/from it
 ox Move the start/end link points
 ox Font from config
 ox Move the curve points

@@ -14,11 +14,11 @@
 		},
 		{
 			"id": "fred",
-			"classes": ["green", "fgYellow"]
+			"classes": ["green"]
 		},
 		{
 			"id": "jane",
-			"classes": ["green", "fgYellow"]
+			"classes": ["green"]
 		},
 		{
 			"id": "bill",
@@ -30,6 +30,19 @@
 		 {
 			"src": "dave",
 			"dest": "bill",
+			"label": "mate",
+			"classes": ["curved"]
+		 },
+		 {
+			"id": "self1",
+			"src": "dave",
+			"dest": "dave",
+			"classes": ["curved"]
+		 },
+		 {
+			"id": "self2",
+			"src": "dave",
+			"dest": "dave",
 			"classes": ["curved"]
 		 }
 	]

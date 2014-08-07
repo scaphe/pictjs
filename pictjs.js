@@ -12,6 +12,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var Pt0 = { 'x': 0, 'y': 0 };
 	var that = {};
 
+	that.highlightThing = undefined;
+	that.highlighting = [];
 	that.structure = {};
 	that.layout = {};
 	that.classes = {};
@@ -27,12 +29,24 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var drawCurve = libs.drawCurve;
 	var drawArrow = libs.drawArrow;
 	var drawLineArrow = libs.drawLineArrow;
+
+	var drawLine = libs.drawLine;
 	var logger = libs.logger;
 
 	// Generic functions
 	function forEach(array, action) {
 	  for (var i = 0; i < array.length; i++)
 	    action(array[i]);
+	}
+
+	function filter(array, matcher) {
+		var ans = [];
+		for (var i = 0; i < array.length; i++ ) {
+			if ( matcher(array[i]) ) {
+				ans.push(array[i]);
+			}
+		}
+		return ans;
 	}
 
 	function find(array, matcher) {
@@ -53,12 +67,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			return thing.id == id;
 		};
 	};
-
-	function matchingLink(link) {
-		return function(thing) {
-			return thing.dest == link.dest && thing.src == link.src;
-		};
-	}
 
 
 	// Functions to find shapes etc
@@ -89,23 +97,24 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return layout;
 	};
 
-	function getPointLayout(pt) {
+	/**
+	 * pt has { link, ptName }
+	 */
+	function getPointLayout(pt, defaultPos) {
 		var layout = find(that.layout.links, withId(pt.link.id))
 		var linkId = pt.link.id;
 		var ptName = pt.ptName;
 		if ( typeof(layout) == 'undefined' ) {
-			var initPt = { "x": 0, "y": 0 };
 			layout = { "id": linkId, 'src': pt.link.src, 'dest': pt.link.dest };
-			layout[ptName] = initPt;
 			logger.info('Creating point layout of '+JSON.stringify(layout));
 			that.layout.links.push(layout);
 		}
 		if ( typeof(layout[ptName]) == 'undefined' ) {
 			logger.info('Creating point for '+ptName+' for pt '+s(pt));
-			layout[ptName] = { 'x': 0, 'y': 0 };
+			layout[ptName] = defaultPos || { 'x': 0, 'y': 0 };
 		}
 		var ans = layout[ptName];
-		logger.info('Found point layout '+ptName+' ans of '+s(ans)+' from layout of '+s(layout)+' for pt '+s(pt));
+		//logger.info('Found point layout '+ptName+' ans of '+s(ans)+' from layout of '+s(layout)+' for pt '+s(pt));
 		return ans;
 	};
 
@@ -114,7 +123,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	}
 
 	function findLink(links, link) {
-		return find(links, matchingLink(link));
+		return find(links, withId(link.id));
 	}
 
 	function isPosInside(pos, shapePos) {
@@ -162,7 +171,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				if ( pos.x >= apt.x-r && pos.x <= apt.x+r &&
 					 pos.y >= apt.y-r && pos.y <= apt.y+r ) {
 					found = found || { 'link': link, 'ptName': ptName, 'pt': pt };
-					logger.info('Found pt of '+JSON.stringify(found));
 				}
 			}
 		}
@@ -235,37 +243,93 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return shape;
 	}
 
-	function fontFrom(fontData) {
+	function fontFrom(fontData, defaultPx) {
+		defaultPx = defaultPx || 30;
 		if ( fontData ) {
 			var px = fontData.px || 20;
 			var name = fontData.fontName || 'Arial';
 			return { 'px': px, 'name': name, font: px+'px '+name };
 		} else {
-			return { 'px': 30, 'name': 'Arial', font: '30px Arial' };
+			return { 'px': defaultPx, 'name': 'Arial', font: defaultPx+'px Arial' };
+		}
+	}
+
+	function isHighlighting(thing) {
+		var index = 0;
+		while ( index < that.highlighting.length ) {
+			if ( that.highlighting[index].id == thing.id ) {
+				return true;
+			}
+			index = index + 1;
+		}
+		return false;
+	}
+
+	function highlightShape(shape) {
+		if ( that.highlightThing != shape ) {
+			that.highlightThing = shape;
+			that.highlighting = [shape];
+			forEach(
+				filter(
+					that.structure.links,
+					function (link) {
+						return link.src == shape.id || link.dest == shape.id;
+					}
+				),
+				function (link) {
+					that.highlighting.push(link);
+					var srcShape = find(that.structure.shapes, withId(link.src));
+					var destShape = find(that.structure.shapes, withId(link.dest));
+					if ( srcShape ) that.highlighting.push(srcShape);
+					if ( destShape ) that.highlighting.push(destShape);
+				}
+			);
+			redraw();
+		}
+	}
+
+	function highlightLinkAndPoint(link, point) {
+		if ( that.highlightThing != link ) {
+			that.highlightThing = link;
+			that.highlighting = [link];
+			redraw();
+		}
+	}
+
+	function clearHighlights() {
+		var wantRedraw = false;
+		if ( that.highlighting.length > 0 ) {
+			wantRedraw = true;
+		}
+		that.highlightThing = undefined;
+		that.highlighting = [];
+		if ( wantRedraw ) {
+			redraw();
 		}
 	}
 	
 	function drawShape(shape) {
 		var pos = getShapePos(shape);
+		var fontData = fontFrom(shape.font);
+		var label = shape.label || shape.id;
+
+		if ( isHighlighting(shape) ) {
+			ctx.fillStyle = 'yellow';
+			var r = 6;
+			ctx.fillRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
+		}
 
 		ctx.strokeStyle = shape.fgColor || 'black';
 		ctx.fillStyle = styleFrom(pos, shape.bgColor, 'shape');
 
+		// Draw box
 		ctx.fillRect(pos.x,pos.y,pos.w,pos.h);
-		// Draw a rect
-		//		ctx.strokeStyle="#FF0000";
 		ctx.strokeRect(pos.x,pos.y,pos.w,pos.h);
-
 		// roundRect(ctx, 200,10,100,80,5, true, true);
-
-		// Line with an arrow head
-		//		drawLineArrow(ctx, 30,60, 90,120);
 
 		// Draw some text
 		ctx.fillStyle = styleFrom(pos, shape.fontColor, 'font');
-		var fontData = fontFrom(shape.font);
 		ctx.font = fontData.font;
-		var label = shape.label || shape.id;
 		var m = ctx.measureText(label);
 		var fontX = pos.x + 4;
 		if ( m.width < pos.w ) {
@@ -275,7 +339,10 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 		var fontY = pos.y+fontData.px+4;
 		fontY = pos.y + pos.h/2 + fontData.px/2 - 4;
+
+		// Draw label
 		ctx.fillText(label, fontX, fontY);
+
 
 		// // Underline the text, by knowing how wide it is, note font is 30px, so is 30 high
 		// ctx.strokeStyle="blue";
@@ -296,57 +363,101 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	}
 
+	function getCurve4Points(link) {
+		var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
+		var destPt = absolutePtCoords(link, 'destPt', link.destPt);
+		var pt2 = absolutePtCoords(link, 'pt2', link.pt2);
+		var pt3 = absolutePtCoords(link, 'pt3', link.pt3);
+		var myPoints;
+		if ( pt2 != pt3 ) {
+			myPoints = [
+				srcPt.x, srcPt.y,
+				pt2.x, pt2.y,
+				pt3.x, pt3.y,
+				destPt.x, destPt.y
+			];
+		} else {
+			myPoints = [
+				srcPt.x, srcPt.y,
+				pt2.x, pt2.y,
+				destPt.x, destPt.y
+			];
+		};
+		return myPoints;
+	}
+
 	function drawLink(link) {
 		var fromPos = getShapeIdPos(link.src);
 		var toPos = getShapeIdPos(link.dest);
-		var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt || { 'x': 0, 'y': 0 });
-		var destPt = absolutePtCoords(link, 'destPt', link.destPt || { 'x': 0, 'y': 0 });
+		var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
+		var destPt = absolutePtCoords(link, 'destPt', link.destPt);
+		var last2Pts = [srcPt, destPt];
+
+		// Choose colour of link
+		ctx.strokeStyle="black";
 
 		if ( link.type == 'curve4' ) {
 			// Draw a curvy line
-			ctx.strokeStyle="black";
-			var pt2 = absolutePtCoords(link, 'pt2', link.pt2 || { 'x': 40, 'y': 30 });
-			var pt3 = absolutePtCoords(link, 'pt3', link.pt3 || { 'x': 40, 'y': 30 });
-			var myPoints;
-			if ( pt2 != pt3 ) {
-				myPoints = [
-					srcPt.x, srcPt.y,
-					pt2.x, pt2.y,
-					pt3.x, pt3.y,
-					destPt.x, destPt.y
-				];
-			} else {
-				myPoints = [
-					srcPt.x, srcPt.y,
-					pt2.x, pt2.y,
-					destPt.x, destPt.y
-				];
-			};
+			daveC = ctx;
+			var myPoints = getCurve4Points(link);
+			last2Pts[0] = { 'x': myPoints[myPoints.length-4], 'y': myPoints[myPoints.length-3]};
 			var tension = 0.5;
+			if ( isHighlighting(link) ) {
+				var oldSS = ctx.strokeStyle;
+				ctx.strokeStyle = 'yellow';
+				var i;
+				var hPts;
+				hPts = myPoints.slice(0);
+				for (i = 0; i < hPts.length; i+=2) {
+					hPts[i]++;
+				}
+				drawCurve(ctx, hPts);
+				hPts = myPoints.slice(0);
+				for (i = 0; i < hPts.length; i+=2) {
+					hPts[i]--;
+				}
+				drawCurve(ctx, hPts);
+				hPts = myPoints.slice(0);
+				for (i = 1; i < hPts.length; i+=2) {
+					hPts[i]++;
+				}
+				drawCurve(ctx, hPts);
+				hPts = myPoints.slice(0);
+				for (i = 1; i < hPts.length; i+=2) {
+					hPts[i]--;
+				}
+				drawCurve(ctx, hPts);
+				ctx.strokeStyle = oldSS;
+			}
 			drawCurve(ctx, myPoints); //default tension=0.5
 			//drawCurve(ctx, myPoints, tension);
 			ctx.stroke();
-			// Put an arrow on the end?
-			if ( link.end == 'arrow' ) {
-				var last2Pts = myPoints.slice(-4);
-				logger.debug('Drawing arrow on end of curve4 at '+JSON.stringify(last2Pts));
-				drawArrow(ctx, last2Pts[0], last2Pts[1], last2Pts[2], last2Pts[3]);
-			}
 		} else {
 
 			// Default to 'straight'
-			if ( link.end == 'arrow' ) {
-				drawLineArrow(ctx, srcPt.x, srcPt.y,  destPt.x, destPt.y);
-			} else {		
-				// Draw a line
-				ctx.beginPath();
-				ctx.moveTo(srcPt.x, srcPt.y);
-				ctx.lineTo(destPt.x, destPt.y);
-				ctx.stroke();
+			if ( isHighlighting(link) ) {
+				var oldSS = ctx.strokeStyle;
+				ctx.strokeStyle = 'yellow';
+				drawLine(ctx, srcPt.x-1, srcPt.y, destPt.x-1, destPt.y);
+				drawLine(ctx, srcPt.x, srcPt.y-1, destPt.x, destPt.y-1);
+				drawLine(ctx, srcPt.x+1, srcPt.y, destPt.x+1, destPt.y);
+				drawLine(ctx, srcPt.x, srcPt.y+1, destPt.x, destPt.y+1);
+
+				ctx.strokeStyle = oldSS;
 			}
+			drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
+		}
+
+		// Put an arrow on the end?
+		if ( link.end == 'arrow' ) {
+			logger.debug('Drawing arrow on end of curve4 at '+JSON.stringify(last2Pts));
+			drawArrow(ctx, last2Pts[0].x, last2Pts[0].y, last2Pts[1].x, last2Pts[1].y);
 		}
 	}
 
+	/**
+	 * Merge in the layout data to the link
+	 */
 	function mergedLink(link) {
 		var found = findLink(that.layout.links, link);
 		if ( found ) {
@@ -373,8 +484,44 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}			
 	}
 
+	function drawLinkLabel(link) {
+		var label = link.label;
+		if ( label ) {
+			logger.info('Trying to draw label '+label+' for '+s(link));
+			var fontX;
+			var fontY;
+			if ( link.type == 'curve4' ) {
+				var myPoints = getCurve4Points(link);
+				var pos = {'x': myPoints[2], 'y': myPoints[3]};
+				fontX = pos.x;
+				fontY = pos.y-4;
+			} else {
+				// Straight line, put label in the centre
+				var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
+				var destPt = absolutePtCoords(link, 'destPt', link.destPt);
+				fontX = (srcPt.x + destPt.x)/2;
+				fontY = (srcPt.y + destPt.y)/2;
+			}
+
+			ctx.fillStyle = styleFrom(pos, link.fontColor, 'font');
+			var fontData = fontFrom(link.font, 15);
+			ctx.font = fontData.font;
+			ctx.fillText(label, fontX, fontY);
+		}
+	}
+
 	function drawLinkLabels() {
-		
+		if ( that.structure.shapes ) {
+			var len = that.structure.links.length
+			var index = 0;
+			while (index < len) {
+				var link = that.structure.links[index];
+				link = mergedLink(link);
+				logger.debug('Drawing merged link of '+JSON.stringify(link));
+				drawLinkLabel(link);
+				index = index + 1;
+			}
+		}		
 	}
 
 	function redraw()
@@ -411,11 +558,24 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		redraw();				
 	}
 
+	function restrictPointPos(layout, shapeId) {
+		var pos = getShapeIdPos(shapeId);
+		if ( layout.x < 0 ) layout.x = 0;
+		if ( layout.y < 0 ) layout.y = 0;
+		if ( layout.x > pos.w ) layout.x = pos.w;
+		if ( layout.y > pos.h ) layout.y = pos.h;
+	}
+
 	function applyDraggingPoint(action, pos) {
 		var layout = getPointLayout(action.pt)
-		logger.info('Got point layout of '+s(layout)+' and action of '+s(action));
+		//logger.info('Got point layout of '+s(layout)+' and action of '+s(action));
 		layout.x = pos.x - action.offsetPos.x;
 		layout.y = pos.y - action.offsetPos.y;
+		if ( action.pt.ptName == 'srcPt' ) {
+			restrictPointPos(layout, action.pt.link.src);
+		} else if ( action.pt.ptName == 'destPt' ) {
+			restrictPointPos(layout, action.pt.link.dest);
+		}
 		redraw();
 	}
 
@@ -465,7 +625,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			if ( false ) {
 
 			} else if ( draggingPoint ) {
-				logger.info('Dragging point '+s(draggingPoint));
+				//logger.info('Dragging point '+s(draggingPoint));
 				var offsetPos = {
 					'x': pos.x-draggingPoint.pt.x,
 					'y': pos.y-draggingPoint.pt.y
@@ -495,11 +655,21 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	});
 
 	$(canvas).mousemove(function(e) {
+		var pos = getMousePos(canvas, e);
 		if ( isMouseDown ) {
-			var pos = getMousePos(canvas, e);
 			mouseDragForCurrentAction(pos);
 			//onsole.log('Drag at '+pos.x+', '+pos.y);
 		} else {
+			// mouseover: Highlight the shape under the mouse, if not already highlighted
+			var shape = findShapeAt(pos);
+			var point = findPointAt(pos);
+			if ( point ) {
+				highlightLinkAndPoint(point.link, point);
+			} else if ( shape ) {
+				highlightShape(shape);
+			} else {
+				clearHighlights();
+			}
 			// var pos = getMousePos(canvas, e);
 			//onsole.log('Move at '+pos.x+', '+pos.y);
 		}
@@ -523,7 +693,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				var link = shape.linksTo[index];
 				//logger.info('Fixing link of '+JSON.stringify(link));
 				if ( typeof(link) == 'string' ) {
-					link = { 'id': link, 'dest': link, 'type': 'straight' };
+					link = { 'dest': link, 'type': 'straight' };
 					//shape.linksTo[index] = link;
 				}
 				link.src = shape.id;
@@ -567,6 +737,35 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			}
 			that.layout.links[index] = link;
 			logger.info('Fixed layout link to '+JSON.stringify(link));
+			index = index + 1;
+		}
+
+		var selfOffsets = {};
+		index = 0;
+		while ( index < that.structure.links.length ) {
+			var layout;
+			var link = that.structure.links[index];
+			if ( link.type == 'curve4' ) {
+				var offset = selfOffsets[link.src] || {'x': -50, 'y': 0};
+				if ( link.src == link.dest ) {
+					var pos = getShapeIdPos(link.src);
+					var h = pos.h;
+					layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': 0, 'y': h/2-offset.y});
+					restrictPointPos(layout, link.src);
+					layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': 0, 'y': h/2+offset.y});
+					restrictPointPos(layout, link.src);
+				} else {
+					getPointLayout({'link': link, 'ptName': 'srcPt'});
+					getPointLayout({'link': link, 'ptName': 'destPt'});
+				}
+				getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': offset.x, 'y': h/2-offset.y});
+				getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': offset.x, 'y': h/2+offset.y});
+				selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+8};
+			} else {
+				getPointLayout({'link': link, 'ptName': 'srcPt'});
+				getPointLayout({'link': link, 'ptName': 'destPt'});
+			}
+			logger.info('Fixed pts for '+s(link));
 			index = index + 1;
 		}
 	}

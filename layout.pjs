@@ -1,23 +1,86 @@
 {
-	"shapes": [
-		{
-			"id": "dave",
-			"x": 200, 
-			"y": 10
-		},
-		{
-			"id": "bill",
-			"x": 300,
-			"y": 50
-		}
-	],
-
-	"links": [
-		{
-			"src": "dave",
-			"dest": "bill",
-	   		"pt2": { "x": 100, "y": 200 },
-			"pt3": { "x": 130, "y": 190 } 
-		}
-	]
+  "shapes": [
+    {
+      "id": "dave",
+      "x": 363,
+      "y": 141
+    },
+    {
+      "id": "bill",
+      "x": 738,
+      "y": 193
+    },
+    {
+      "id": "jane",
+      "x": 384,
+      "y": 366
+    },
+    {
+      "id": "fred",
+      "x": 51,
+      "y": 31
+    }
+  ],
+  "links": [
+    {
+      "src": "dave",
+      "dest": "bill",
+      "pt2": {
+        "x": 267,
+        "y": 157
+      },
+      "pt3": {
+        "x": 8,
+        "y": -133
+      },
+      "id": "dave-bill",
+      "srcPt": {
+        "x": 200,
+        "y": 58
+      },
+      "destPt": {
+        "x": 94,
+        "y": 0
+      }
+    },
+    {
+      "id": "dave-fred",
+      "src": "dave",
+      "dest": "fred",
+      "destPt": {
+        "x": 200,
+        "y": 38
+      },
+      "srcPt": {
+        "x": 0,
+        "y": 17
+      }
+    },
+    {
+      "id": "dave-jane",
+      "src": "dave",
+      "dest": "jane",
+      "srcPt": {
+        "x": 103,
+        "y": 100
+      },
+      "destPt": {
+        "x": 97,
+        "y": 0
+      }
+    },
+    {
+      "id": "bill-jane",
+      "src": "bill",
+      "dest": "jane",
+      "destPt": {
+        "x": 200,
+        "y": 52
+      },
+      "srcPt": {
+        "x": 104,
+        "y": 100
+      }
+    }
+  ]
 }
