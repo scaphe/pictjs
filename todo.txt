@@ -1,12 +1,15 @@
 TODO:
-o   Auto size boxes to fit text
+o   Zoom in/out like on google maps
+o   Newlines in labels
+o   Highlights in yellow are overwriting actual diagram at edges - bad
 o   Different shape types (rounded box, circle, oval etc)
-o   Multiple links to given other
-o   Multi-line labels
-
+o   Multiple links to given other, verify have unique ids or generate
+unique ids
 
 
 DONE:
+ox Trivial auto-layout shape positions and lines
+ox Auto size boxes to fit text
 ox Colours for the lines, from classes
 ox Dots on lines only visible when moving the mouse, then after 500ms
 they fade out/vanish

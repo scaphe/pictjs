@@ -21,6 +21,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	that.actions = [];  // Undoable actions
 	that.currentAction = undefined;
 
+	var canvas = document.getElementById(canvasId);
+	var ctx = canvas.getContext("2d");
+
 
 	function s(x) { return JSON.stringify(x); }
 
@@ -168,7 +171,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		} else if ( typeof(pt) == 'undefined' ) {
 			logger.warn("Got no pt?  For ptName of "+ptName+" and link of "+s(link));
 		}
-		//logger.info('AbsCoords for '+s(pt)+' using '+s(shapePos));
+		// logger.info('AbsCoords for '+ptName+" pt of "+s(pt)+' using '+s(shapePos));
 		return { 'x': shapePos.x+pt.x, 'y': shapePos.y+pt.y };
 	}
 
@@ -196,9 +199,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return found;
 	}
 
-
-	var canvas = document.getElementById(canvasId);
-	var ctx = canvas.getContext("2d");
 
 
 	function clearCanvas()
@@ -246,7 +246,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				var cls = shape.classes[index];
 				var clsDef = that.classes[cls];
 				shape = $.extend(true, {}, shape, clsDef);
-				logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
+				//logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
 				index = index + 1;
 			}
 		}
@@ -410,6 +410,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 		// Choose colour of link
 		ctx.strokeStyle = link.color || "black";
+		ctx.fillStyle = ctx.strokeStyle;
 
 		if ( link.type == 'curve4' ) {
 			// Draw a curvy line
@@ -420,28 +421,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			if ( isHighlighting(link) ) {
 				var oldSS = ctx.strokeStyle;
 				ctx.strokeStyle = 'yellow';
-				var i;
-				var hPts;
-				hPts = myPoints.slice(0);
-				for (i = 0; i < hPts.length; i+=2) {
-					hPts[i]++;
-				}
-				drawCurve(ctx, hPts, showPoints);
-				hPts = myPoints.slice(0);
-				for (i = 0; i < hPts.length; i+=2) {
-					hPts[i]--;
-				}
-				drawCurve(ctx, hPts, showPoints);
-				hPts = myPoints.slice(0);
-				for (i = 1; i < hPts.length; i+=2) {
-					hPts[i]++;
-				}
-				drawCurve(ctx, hPts, showPoints);
-				hPts = myPoints.slice(0);
-				for (i = 1; i < hPts.length; i+=2) {
-					hPts[i]--;
-				}
-				drawCurve(ctx, hPts, showPoints);
+				ctx.setLineWidth(5);
+				drawCurve(ctx, myPoints, showPoints); //default tension=0.5
+				ctx.setLineWidth(1);
 				ctx.strokeStyle = oldSS;
 			}
 			drawCurve(ctx, myPoints, showPoints); //default tension=0.5
@@ -453,11 +435,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			if ( isHighlighting(link) ) {
 				var oldSS = ctx.strokeStyle;
 				ctx.strokeStyle = 'yellow';
-				drawLine(ctx, srcPt.x-1, srcPt.y, destPt.x-1, destPt.y);
-				drawLine(ctx, srcPt.x, srcPt.y-1, destPt.x, destPt.y-1);
-				drawLine(ctx, srcPt.x+1, srcPt.y, destPt.x+1, destPt.y);
-				drawLine(ctx, srcPt.x, srcPt.y+1, destPt.x, destPt.y+1);
-
+				ctx.setLineWidth(5);
+				drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
+				ctx.setLineWidth(1);
 				ctx.strokeStyle = oldSS;
 			}
 			drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
@@ -466,6 +446,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		// Put an arrow on the end?
 		if ( link.end == 'arrow' ) {
 			logger.debug('Drawing arrow on end of curve4 at '+JSON.stringify(last2Pts));
+			ctx.fillStyle = ctx.strokeStyle;
 			drawArrow(ctx, last2Pts[0].x, last2Pts[0].y, last2Pts[1].x, last2Pts[1].y);
 		}
 	}
@@ -532,7 +513,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			ctx.fillText(label, fontX, fontY-1);
 			ctx.fillText(label, fontX, fontY+1);
 
-			ctx.fillStyle = styleFrom(pos, link.color || link.fontColor, 'font');
+			ctx.fillStyle = styleFrom(pos, link.fontColor || link.color, 'font');
 			ctx.fillText(label, fontX, fontY);
 		}
 	}
@@ -639,7 +620,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				doneAction();
 
 			} else if ( action.action == 'draggingPoint' ) {
-				logger.info('Applying draggingPoint');
 				applyDraggingPoint(action, pos);
 				doneAction();
 
@@ -657,7 +637,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			isMouseDown = true;
 			var pos = getMousePos(canvas, e);
 
-			console.log('Down at '+pos.x+', '+pos.y);
 			var draggingShape = findShapeAt(pos);
 			var draggingPoint = findPointAt(pos);
 			if ( false ) {
@@ -742,7 +721,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	function fixLinksTo(shape) {
 		if ( shape.linksTo ) {
-			logger.info('Fixing linksTo of '+JSON.stringify(shape.linksTo));
+			// logger.info('Fixing linksTo of '+JSON.stringify(shape.linksTo));
 			var index = 0;
 			while ( index < shape.linksTo.length ) {
 				var link = shape.linksTo[index];
@@ -777,6 +756,10 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	function min(a,b) { if ( a < b ) { return a; } else { return b; } }
 
+	var maxShapePosSoFar = {x:canvas.width/2, y:20};
+	var autoPlacementRow = 0;
+	var autoPlacementXDivisors = [0.5, 0.3, 0.6, 0.15, 0.75, 0.05];
+
 	function defaultShapePos(shape) {
 		var fontData = fontFrom(shape.font);
 		var label = getShapeLabel(shape);
@@ -784,10 +767,55 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		var m = ctx.measureText(label);
 		var fontHeight = fontData.px;
 		var fontWidth = m.width;
-		var layout = getShapeLayout(shape);
-		layout.w = fontWidth*1.62 + fontHeight;
-		layout.h = min(fontHeight*1.62*2, layout.w/1.62);
-		logger.info("Set size of shape "+shape.id+" to "+layout.w+", "+layout.h+" using font of "+s(fontData));
+		var shapeW = fontWidth*1.62 + fontHeight;
+		var shapeH = min(fontHeight*1.62*2, shapeW/1.62);
+		var layout = find(that.layout.shapes, withId(shape.id));
+		if ( typeof(layout) == 'undefined' ) {
+			// Compute where we think is a good place to put this shape
+			// Try to find a spot that is not already too near to another shape?
+			var div = autoPlacementXDivisors[autoPlacementRow];
+			var x = maxShapePosSoFar.x;
+			var y = maxShapePosSoFar.y;
+			if ( y+shapeH > canvas.height ) {
+				// Move to next auto-placement row
+				if ( autoPlacementRow < autoPlacementXDivisors.length-1 ) {
+					autoPlacementRow++;
+				}
+				div = autoPlacementXDivisors[autoPlacementRow];
+				maxShapePosSoFar.x = canvas.width*div;
+				maxShapePosSoFar.y = div*10;
+				x = maxShapePosSoFar.x;
+				y = maxShapePosSoFar.y;				
+			}
+			//maxShapePosSoFar.x += 50;
+			maxShapePosSoFar.y += shapeH+20;
+			layout = {"id": shape.id, "x": x-shapeW/2, "y": y};
+			that.layout.shapes.push(layout);			
+		}
+		layout.w = shapeW;
+		layout.h = shapeH;
+		// logger.info("Set size of shape "+shape.id+" to "+s(layout)+" using font of "+s(fontData));
+	}
+
+	function fromToDefaultEdges(fromPos, toPos) {
+		var fx,fy, tx,ty;
+		// logger.info('Checking fromTo of '+s(fromPos)+' vs '+s(toPos));
+		if ( fromPos.y+fromPos.h < toPos.y ) {
+			// From is above to
+			fy = fromPos.h;
+			ty = 0;
+		} else {
+			fy = 0;
+			ty = toPos.h/2;
+		}
+		if ( fromPos.x < toPos.x ) {
+			fx = fromPos.w/2;
+			tx = 0;
+		} else {
+			fx = 0;
+			tx = toPos.w/2;
+		}
+		return { 'fx': fx, 'fy': fy, 'tx': tx, 'ty': ty };
 	}
 
 	function fixLayout() {
@@ -815,32 +843,42 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		while ( index < that.structure.links.length ) {
 			var layout;
 			var link = that.structure.links[index];
-			if ( link.type == 'curve4' ) {
-				var offset = selfOffsets[link.src] || {'x': -50, 'y': 0};
-				if ( link.src == link.dest ) {
-					var pos = getShapeIdPos(link.src);
-					var h = pos.h;
-					layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': 0, 'y': h/2-offset.y});
-					restrictPointPos(layout, link.src);
-					layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': 0, 'y': h/2+offset.y});
-					restrictPointPos(layout, link.src);
-				} else {
-					layout = getPointLayout({'link': link, 'ptName': 'srcPt'});
-					restrictPointPos(layout, link.src);
+			var defaultEdges = fromToDefaultEdges(getShapeIdPos(link.src), getShapeIdPos(link.dest));
 
-					layout = getPointLayout({'link': link, 'ptName': 'destPt'});
+			if ( link.type == 'curve4' ) {
+				// curve4
+				var pos = getShapeIdPos(link.src);
+				var posDest = getShapeIdPos(link.dest);
+				var offset = selfOffsets[link.src] || {'x': -50, 'y': 4};
+				if ( link.src == link.dest ) {
+					// Line to self, make a nice loop
+					var h = pos.h;
+					layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': 0, 'y': h/2-offset.y/2});
+					restrictPointPos(layout, link.src);
+					layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': 0, 'y': h/2+offset.y/2});
+					restrictPointPos(layout, link.src);
+					layout = getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': offset.x, 'y': h/2-offset.y});
+					layout = getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': offset.x, 'y': h/2+offset.y});
+					selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+8};
+				} else {
+					// Line to a different shape
+					layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': defaultEdges.fx, 'y': defaultEdges.fy});
+					restrictPointPos(layout, link.src);
+					layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': defaultEdges.tx, 'y': defaultEdges.ty});
 					restrictPointPos(layout, link.dest);
+					layout = getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': 30, 'y': pos.h+50});
+					layout = getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': -40, 'y': -50});
 				}
-				getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': offset.x, 'y': h/2-offset.y});
-				getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': offset.x, 'y': h/2+offset.y});
-				selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+8};
+
 			} else {
-				layout = getPointLayout({'link': link, 'ptName': 'srcPt'});
+				// Straight line to another shape
+				layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': defaultEdges.fx, 'y': defaultEdges.fy});
 				restrictPointPos(layout, link.src);
 
-				layout = getPointLayout({'link': link, 'ptName': 'destPt'});
+				layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': defaultEdges.tx, 'y': defaultEdges.ty});
 				restrictPointPos(layout, link.dest);
 			}
+
 			// logger.info('Fixed pts for '+s(link));
 			index = index + 1;
 		}
@@ -859,6 +897,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var index = 0;
 			while ( index < that.structure.shapes.length ) {
 				var shape = that.structure.shapes[index];
+				if ( typeof(shape) == 'string' ) {
+					shape = { 'id': shape };
+				}
 				fixLinksTo(shape);
 				shape = applyClasses(shape);
 				defaultShapePos(shape);
@@ -885,6 +926,12 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	$.getJSON( layoutFile)
 	    .done(function( data ) {
 	    	that.layout = data;
+			if ( typeof(that.layout.shapes) == 'undefined' ) {
+				that.layout.shapes = [];
+			}
+			if ( typeof(that.layout.links) == 'undefined' ) {
+				that.layout.links = [];
+			}
 			loadedLayout = true;
 			logger.info('Loaded layout');
 			//logger.info('Got layout of '+JSON.stringify(data));

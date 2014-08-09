@@ -1,10 +1,10 @@
 function createPictJsLibs() {
 
-    // Arrow heads from: http://deepliquid.com/blog/archives/98
+    // Arrow heads from: http://deepliquid.com/blog/archives/98 - slight modifications
     var arrow = [
-	[ 2, 0 ],
-	[ -10, -4 ],
-	[ -10, 4]
+	[ 0, 0 ],
+	[ -12, -4 ],
+	[ -12, 4]
     ];
 
     function drawFilledPolygon(ctx, shape) {
