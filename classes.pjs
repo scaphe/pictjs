@@ -3,7 +3,7 @@
 		"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "green" }
 	},
 
-	"curved": {
+	"curve4": {
 		"type": "curve4",
 		"end": "arrow"
 	}

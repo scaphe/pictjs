@@ -323,15 +323,39 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		else return shape.id;
 	}
 	
+	function fillMultilineText(label, pos, fontY, fontData) {
+		var bits = label.split("\n");
+		var index = 0;
+		while ( index < bits.length ) {
+			var bit = bits[index];
+			
+			// Centre the words
+			var m = measureText(bit, fontData);
+			var fontX;
+			if ( typeof(pos) == 'number' ) {
+				fontX = pos;
+			} else {
+				fontX = pos.x + pos.w/2 - m.width/2;
+				// Centre the text horizontally
+				fontX = pos.x + pos.w/2 - m.width/2;
+			}
+
+			ctx.fillText(bit, fontX, fontY);
+			// Move down a line
+			fontY += fontData.px;
+			index++;
+		}
+	}
+
 	function drawShape(shape) {
 		var pos = getShapePos(shape);
-		var fontData = fontFrom(shape.font);
-		var label = getShapeLabel(shape);
 
 		if ( isHighlighting(shape) ) {
+			ctx.strokeStyle = 'yellow';
 			ctx.fillStyle = 'yellow';
 			var r = 6;
 			ctx.fillRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
+			ctx.strokeRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
 		}
 
 		ctx.strokeStyle = shape.fgColor || 'black';
@@ -340,31 +364,31 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		// Draw box
 		ctx.fillRect(pos.x,pos.y,pos.w,pos.h);
 		ctx.strokeRect(pos.x,pos.y,pos.w,pos.h);
-		// roundRect(ctx, 200,10,100,80,5, true, true);
+		//roundRect(ctx, pos.x,pos.y,pos.w,pos.h, 5, true, true);
+
+		drawShapeLabel(shape);
+	}
+	
+	function drawShapeLabel(shape) {
+		var pos = getShapePos(shape);
+		var fontData = fontFrom(shape.font);
+		var label = getShapeLabel(shape);
 
 		// Draw some text
 		ctx.fillStyle = styleFrom(pos, shape.fontColor, 'font');
 		ctx.font = fontData.font;
-		var m = ctx.measureText(label);
+		var m = measureText(label, fontData);
+		var bits = label.split("\n");
+		ctx.fontAlign='start';
+		var fontY = pos.y + pos.h/2 - m.height/2 + fontData.px*.8;
 		var fontX = pos.x + 4;
 		if ( m.width < pos.w ) {
 			// Centre the text horizontally
 			fontX = pos.x + pos.w/2 - m.width/2;
 			//logger.info('On '+shape.id+' made fontX of '+fontX+' from '+pos.x+', '+pos.w+', m='+m.width);
 		}
-		var fontY = pos.y+fontData.px+4;
-		fontY = pos.y + pos.h/2 + fontData.px/2 - 4;
 
-		// Draw label
-		ctx.fillText(label, fontX, fontY);
-
-
-		// // Underline the text, by knowing how wide it is, note font is 30px, so is 30 high
-		// ctx.strokeStyle="blue";
- 		// 	ctx.beginPath();
-		//  		ctx.moveTo(10,50);
-		// ctx.lineTo(10+m.width, 50);
-		// ctx.stroke();
+		fillMultilineText(label, pos, fontY, fontData);
 	}
 
 	function drawShapes() {
@@ -502,19 +526,30 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var fontData = fontFrom(link.font, 15);
 			ctx.font = fontData.font;
 
+			var m = measureText(label, fontData);
+			fontY = fontY - m.height/2;
+
 			// Make sure people can read the label - make some "space" around it
 			if ( isHighlighting(link) ) {
 				ctx.fillStyle = "yellow";
 			} else {
 				ctx.fillStyle = "white";
 			}
+
+			fillMultilineText(label, fontX-1, fontY, fontData);
+			fillMultilineText(label, fontX+1, fontY, fontData);
+			fillMultilineText(label, fontX, fontY-1, fontData);
+			fillMultilineText(label, fontX, fontY+1, fontData);
+			/*
 			ctx.fillText(label, fontX-1, fontY);
 			ctx.fillText(label, fontX+1, fontY);
 			ctx.fillText(label, fontX, fontY-1);
 			ctx.fillText(label, fontX, fontY+1);
+			*/
 
 			ctx.fillStyle = styleFrom(pos, link.fontColor || link.color, 'font');
-			ctx.fillText(label, fontX, fontY);
+			fillMultilineText(label, fontX, fontY, fontData);
+			// ctx.fillText(label, fontX, fontY);
 		}
 	}
 
@@ -739,18 +774,28 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	}
 
+	var uniqueLinkNames = {};
 	function fixLinks() {
+		var errors = '';
 		var index = 0;
 		while ( index < that.structure.links.length ) {
 			var link = that.structure.links[index];
 			if ( typeof(link.id) == 'undefined' ) {
-				link.id = link.src+'-'+link.dest;
+				var label = link.label || '';
+				link.id = link.src+'-'+label+'-'+link.dest;
 			}
+			if ( typeof(uniqueLinkNames[link.id]) != 'undefined' ) {
+				errors += 'Duplicate link id found of ['+link.id+'].  '
+			}
+			uniqueLinkNames[link.id] = 1;
 			link = applyClasses(link);
 			that.structure.links[index] = link;
 			//logger.info('Fixed link to '+JSON.stringify(link));
 			
 			index = index + 1;
+		}
+		if ( errors != '' ) {
+			logger.error('Errors: '+errors);
 		}
 	}
 
@@ -760,12 +805,29 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var autoPlacementRow = 0;
 	var autoPlacementXDivisors = [0.5, 0.3, 0.6, 0.15, 0.75, 0.05];
 
+	function measureText(label, fontData) {
+		var bits = label.split("\n");
+		// Get longest bit of label
+		var bit = bits[0];
+		var index = 0;
+		while ( index < bits.length ) {
+			if ( bit.length < bits[index].length ) {
+				bit.length = bits[index].length;
+			}
+			index++;
+		}
+		// logger.info('Measuring bit of '+bit+' from bits of '+s(bits));
+		ctx.font = fontData.font;
+		var m = ctx.measureText(bit);
+		return { 'width': m.width, 'height': fontData.px*bits.length }
+	}
+	
 	function defaultShapePos(shape) {
 		var fontData = fontFrom(shape.font);
 		var label = getShapeLabel(shape);
 		ctx.font = fontData.font;
-		var m = ctx.measureText(label);
-		var fontHeight = fontData.px;
+		var m = measureText(label, fontData);
+		var fontHeight = m.height;
 		var fontWidth = m.width;
 		var shapeW = fontWidth*1.62 + fontHeight;
 		var shapeH = min(fontHeight*1.62*2, shapeW/1.62);
@@ -845,6 +907,11 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var link = that.structure.links[index];
 			var defaultEdges = fromToDefaultEdges(getShapeIdPos(link.src), getShapeIdPos(link.dest));
 
+			// Link to self must be curved or something, straight will not do
+			if ( link.src == link.dest && (!link.type || link.type == 'straight') ) {
+				link.type = 'curve4';
+			}
+
 			if ( link.type == 'curve4' ) {
 				// curve4
 				var pos = getShapeIdPos(link.src);
@@ -891,27 +958,41 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var loadedLayout = false;
 	var loadedClasses = false;
 
-
+	var uniqueShapeNames = {};
 	function fixStructure() {
 		if ( loadedStructure && loadedLayout && loadedClasses ) {
+			var errors = '';
 			var index = 0;
 			while ( index < that.structure.shapes.length ) {
 				var shape = that.structure.shapes[index];
 				if ( typeof(shape) == 'string' ) {
 					shape = { 'id': shape };
 				}
+				if ( typeof(shape.id) == 'undefined' ) {
+					shape.id = shape.label || 'undefined';
+				}
+				if ( typeof(uniqueShapeNames[shape.id]) != 'undefined' ) {
+					errors += 'Duplicate shape id found of ['+shape.id+'].  ';
+				}
+				uniqueShapeNames[shape.id] = 1;
 				fixLinksTo(shape);
 				shape = applyClasses(shape);
 				defaultShapePos(shape);
 				that.structure.shapes[index] = shape;
 				index = index +1;
 			}
+
+			if ( errors != '' ) {
+				logger.error('Errors: '+errors);
+			}
+
 			fixLinks();
 			fixLayout();
 			daveS = that.structure;
 			//	    	console.log('Updating structure to '+JSON.stringify(that.structure, undefined, 2));
 			redraw();
 		}
+
 	}
 
 	$.getJSON( structureFile)

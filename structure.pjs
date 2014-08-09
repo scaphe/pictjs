@@ -2,12 +2,12 @@
 	"shapes": [
 		{
 			"id": "dave",
-			"label": "long dave\nlabel",
+			"label": "long dave\nlabel\nloads",
 			"shape": "rect",
 			"font": { "px": 20, "fontName": "Arial" },
-			"fontColor": "#8888ff",
+			"fontColor": "#4444ff",
 			"fgColor": "blue",
-			"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "#aaaaff" },
+			"bgColor": { "type": "verticalGradient", "color1": "white", "color2": "#ddddff" },
 			"linksTo": [
 				{ "dest": "fred", "label": "friend", "end": "arrow" },
 				"jane"
@@ -15,6 +15,7 @@
 		},
 		{
 			"id": "fred",
+			"linksTo": ["john"],
 			"classes": ["green"]
 		},
 		{
@@ -22,33 +23,38 @@
 			"classes": ["green"]
 		},
 		{
-			"id": "bill",
+			"label": "bill",
 			"linksTo": [ { "dest": "jane", "end": "arrow" } ]
-		}
+		},
+		"john"
 	],
 
 	"links": [
 		 {
 			"src": "dave",
 			"dest": "bill",
-			"label": "mate",
+			"label": "old\nmate\nfrom\n(times)",
 			"color": "blue",
 			"fontColor": "red",
-			"classes": ["curved"]
+			"classes": ["curve4"]
 		 },
 		 {
-			"id": "self1",
 			"src": "dave",
 			"dest": "dave",
 			"label": "self1",
 			"color": "red",
-			"classes": ["curved"]
+			"classes": ["curve4"]
 		 },
 		 {
-			"id": "self2",
 			"src": "dave",
 			"dest": "dave",
-			"classes": ["curved"]
+			"label": "self2"
+		 },
+		 {
+			"src": "dave",
+			"dest": "dave",
+			"label": "self3",
+			"classes": ["curve4"]
 		 }
 	]
 }
