@@ -2,6 +2,7 @@
 	"shapes": [
 		{
 			"id": "dave",
+			"label": "long dave label",
 			"shape": "rect",
 			"font": { "px": 20, "fontName": "Arial" },
 			"fontColor": "#ff8800",
@@ -31,12 +32,16 @@
 			"src": "dave",
 			"dest": "bill",
 			"label": "mate",
+			"color": "blue",
+			"fontColor": "blue",
 			"classes": ["curved"]
 		 },
 		 {
 			"id": "self1",
 			"src": "dave",
 			"dest": "dave",
+			"label": "self1",
+			"color": "red",
 			"classes": ["curved"]
 		 },
 		 {

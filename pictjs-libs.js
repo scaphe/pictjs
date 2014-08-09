@@ -176,8 +176,8 @@ function createPictJsLibs() {
 	for(i=2;i<pts.length-1;i+=2) ctx.lineTo(pts[i], pts[i+1]);
     };
 
-    function drawCurve(ctx, ptsa, tension, isClosed, numOfSegments, showPoints) {
-	showPoints  = showPoints ? showPoints : true;
+    function drawCurve(ctx, ptsa, showPoints, tension, isClosed, numOfSegments) {
+	if ( typeof(showPoints) == 'undefined' ) showPoints = true;
 
 	ctx.beginPath();
 
@@ -187,8 +187,9 @@ function createPictJsLibs() {
 	    ctx.stroke();
 	    ctx.beginPath();
 	    for(var i=2;i<ptsa.length-3;i+=2) 
-	        ctx.rect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
+	        ctx.fillRect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
 	}
+	ctx.stroke();
     };
 
 
@@ -215,6 +216,10 @@ function createPictJsLibs() {
 	loggerLevel('INFO', msg);
     };
 
+    function loggerWarn(msg) {
+	loggerLevel('WARN', msg);
+    };
+
     function loggerError(msg) {
 	loggerLevel('ERROR', msg);
 	alert('ERROR: '+msg);
@@ -223,6 +228,7 @@ function createPictJsLibs() {
     var logger = {
 	"debug": loggerDebug,
 	"info": loggerInfo,
+	"warn": loggerWarn,
 	"error": loggerError
     };
 
