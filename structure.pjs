@@ -1,4 +1,6 @@
 {
+	"defaultShapeClasses": ["green"],
+	"defaultLinkClasses": ["arrows"],
 	"shapes": [
 		{
 			"id": "dave",
@@ -15,13 +17,9 @@
 		},
 		{
 			"id": "fred",
-			"linksTo": ["john"],
-			"classes": ["green"]
+			"linksTo": ["john"]
 		},
-		{
-			"id": "jane",
-			"classes": ["green"]
-		},
+		"jane",
 		{
 			"label": "bill",
 			"linksTo": [ { "dest": "jane", "end": "arrow" } ]

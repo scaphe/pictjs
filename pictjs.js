@@ -225,9 +225,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			if ( reason == 'font' ) {
 				return 'black';
 			} else {
-				// Create a gradient
+				// Default: Create a nice default gradient fill
 				var grd = ctx.createLinearGradient(pos.x,pos.y,pos.x,pos.y+pos.h);
-				grd.addColorStop(0,"red");
+				grd.addColorStop(0,"#ffffaa");
 				grd.addColorStop(1,"white");
 				return grd;
 			}
@@ -239,14 +239,21 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		ctx.fillStyle = styleFrom(pos, shape.bgColor);
 	}
 
-	function applyClasses(shape) {
+	function applyClasses(shape, extraClasses) {
+		var allClasses = [];
 		if ( shape.classes ) {
+			forEach(shape.classes, function (c) { allClasses.push(c); });
+		}
+		if ( extraClasses ) {
+			forEach(extraClasses, function (c) { allClasses.push(c); });
+		}
+		if ( allClasses ) {
 			var index = 0;
-			while ( index < shape.classes.length ) {
-				var cls = shape.classes[index];
+			while ( index < allClasses.length ) {
+				var cls = allClasses[index];
 				var clsDef = that.classes[cls];
-				shape = $.extend(true, {}, shape, clsDef);
-				//logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
+				shape = $.extend(true, {}, clsDef, shape);
+				logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
 				index = index + 1;
 			}
 		}
@@ -323,7 +330,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		else return shape.id;
 	}
 	
-	function fillMultilineText(label, pos, fontY, fontData) {
+	function fillMultilineText(label, midX, fontY, fontData) {
 		var bits = label.split("\n");
 		var index = 0;
 		while ( index < bits.length ) {
@@ -331,14 +338,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			
 			// Centre the words
 			var m = measureText(bit, fontData);
-			var fontX;
-			if ( typeof(pos) == 'number' ) {
-				fontX = pos;
-			} else {
-				fontX = pos.x + pos.w/2 - m.width/2;
-				// Centre the text horizontally
-				fontX = pos.x + pos.w/2 - m.width/2;
-			}
+			// Centre the text horizontally
+			var fontX = midX - m.width/2;
 
 			ctx.fillText(bit, fontX, fontY);
 			// Move down a line
@@ -388,7 +389,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			//logger.info('On '+shape.id+' made fontX of '+fontX+' from '+pos.x+', '+pos.w+', m='+m.width);
 		}
 
-		fillMultilineText(label, pos, fontY, fontData);
+		fillMultilineText(label, pos.x + pos.w/2, fontY, fontData);
 	}
 
 	function drawShapes() {
@@ -446,11 +447,13 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				var oldSS = ctx.strokeStyle;
 				ctx.strokeStyle = 'yellow';
 				ctx.setLineWidth(5);
-				drawCurve(ctx, myPoints, showPoints); //default tension=0.5
+				drawCurve(ctx, myPoints, 'yellow'); //default tension=0.5
 				ctx.setLineWidth(1);
 				ctx.strokeStyle = oldSS;
 			}
-			drawCurve(ctx, myPoints, showPoints); //default tension=0.5
+			var pointsColor = undefined;
+			if ( showPoints ) { pointsColor = ctx.fillStyle; }
+			drawCurve(ctx, myPoints, pointsColor); //default tension=0.5
 			//drawCurve(ctx, myPoints, tension);
 			ctx.stroke();
 		} else {
@@ -788,7 +791,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				errors += 'Duplicate link id found of ['+link.id+'].  '
 			}
 			uniqueLinkNames[link.id] = 1;
-			link = applyClasses(link);
+			link = applyClasses(link, that.structure.defaultLinkClasses);
 			that.structure.links[index] = link;
 			//logger.info('Fixed link to '+JSON.stringify(link));
 			
@@ -976,7 +979,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				}
 				uniqueShapeNames[shape.id] = 1;
 				fixLinksTo(shape);
-				shape = applyClasses(shape);
+				shape = applyClasses(shape, that.structure.defaultShapeClasses);
 				defaultShapePos(shape);
 				that.structure.shapes[index] = shape;
 				index = index +1;
@@ -1002,7 +1005,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			fixStructure();
 			logger.info('Loaded structure');
 	    })
-	     .error(function() { alert("error"); });
+	     .error(function() { logger.error("Bad structure file"); });
 
 	$.getJSON( layoutFile)
 	    .done(function( data ) {
@@ -1017,7 +1020,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			logger.info('Loaded layout');
 			//logger.info('Got layout of '+JSON.stringify(data));
 			fixStructure();
-	    });
+	    })
+	     .error(function() { logger.error("Bad layout file"); });
 
 	$.getJSON( classesFile)
 	    .done(function( data ) {
@@ -1025,7 +1029,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			loadedClasses = true;
 			logger.info('Loaded classes');
 			fixStructure();
-	    });
+	    })
+	     .error(function() { logger.error("Bad classes file"); });
+
 
 	dave=that;
 
@@ -1044,7 +1050,16 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	that.showLayout = showLayout;
 
-	that;
+	// Wrap up line types and shape types as objects, pluggable maybe, by "name"
+	function makeCurve4() {
+		var that = {};
+		that.name = function() { return "curve4"; }
+		that.add = function(a, b) { return a+b; }
+		return that;
+	}
+	dave4 = makeCurve4();
+
+	return that;
 };
 
 function pictjs_at(canvasId, structureFile, layoutFile, classesFile) {

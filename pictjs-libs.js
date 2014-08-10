@@ -177,18 +177,22 @@ function createPictJsLibs() {
     };
 
     function drawCurve(ctx, ptsa, showPoints, tension, isClosed, numOfSegments) {
-	if ( typeof(showPoints) == 'undefined' ) showPoints = true;
+	//if ( typeof(showPoints) == 'undefined' ) showPoints = true;
+
+	if (showPoints) {
+	    ctx.beginPath();
+	    var oldFS = ctx.fillStyle;
+	    ctx.fillStyle = showPoints;
+	    for(var i=2;i<ptsa.length-3;i+=2) 
+	        ctx.fillRect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
+	    ctx.stroke();
+	    ctx.fillStyle = oldFS;
+	}
 
 	ctx.beginPath();
 
 	drawLinesForCurve(ctx, getCurvePoints(ptsa, tension, isClosed, numOfSegments));
 
-	if (showPoints) {
-	    ctx.stroke();
-	    ctx.beginPath();
-	    for(var i=2;i<ptsa.length-3;i+=2) 
-	        ctx.fillRect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
-	}
 	ctx.stroke();
     };
 
