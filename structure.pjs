@@ -38,6 +38,14 @@
 		 },
 		 {
 			"src": "dave",
+			"dest": "bill",
+			"label": "example1",
+			"color": "blue",
+			"fontColor": "red",
+			"classes": ["curve4"]
+		 },
+		 {
+			"src": "dave",
 			"dest": "dave",
 			"label": "self1",
 			"color": "red",

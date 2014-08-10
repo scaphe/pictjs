@@ -179,14 +179,15 @@ function createPictJsLibs() {
     function drawCurve(ctx, ptsa, showPoints, tension, isClosed, numOfSegments) {
 	//if ( typeof(showPoints) == 'undefined' ) showPoints = true;
 
-	if (showPoints) {
+	if (showPoints > 0) {
 	    ctx.beginPath();
 	    var oldFS = ctx.fillStyle;
-	    ctx.fillStyle = showPoints;
+	    ctx.save();
+	    ctx.globalAlpha = showPoints;
 	    for(var i=2;i<ptsa.length-3;i+=2) 
 	        ctx.fillRect(ptsa[i] - 2, ptsa[i+1] - 2, 4, 4);
 	    ctx.stroke();
-	    ctx.fillStyle = oldFS;
+	    ctx.restore();
 	}
 
 	ctx.beginPath();

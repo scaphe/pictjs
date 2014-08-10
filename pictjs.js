@@ -14,7 +14,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	that.highlightThing = undefined;
 	that.highlighting = [];
-	that.showPoints = false;
+	that.showPoints = 0;
+	that.zoomLevel = 100;
+	that.pan = { 'x': 0, 'y': 0 };
 	that.structure = {};
 	that.layout = {};
 	that.classes = {};
@@ -78,6 +80,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return getShapeIdPos(shape.id);
 	};
 
+	function unscale(x) { return x / that.zoomLevel * 100; }
+
 	function getShapeIdPos(shapeId) {
 		var x = 0;
 		var y = 0;
@@ -90,7 +94,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			w = layout.w || 200;
 			h = layout.h || 200/1.62;
 		}
-		var pos = {"x": x, "y": y, "w":w, "h":h};
+		var pos = { "x": x, "y": y, "w": w, "h": h };
 		return pos;
 	};
 
@@ -178,7 +182,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	function findPointAt(pos) {
 		var found = undefined;
 		function checkPoint(link, ptName, pt) {
-			var r = 4;
+			var r = unscale(4);
 			if ( pt ) {
 				apt = absolutePtCoords(link, ptName, pt);
 				if ( pos.x >= apt.x-r && pos.x <= apt.x+r &&
@@ -426,7 +430,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return myPoints;
 	}
 
-	function drawLink(link) {
+	function drawLink(link, drawHighlights) {
 		var fromPos = getShapeIdPos(link.src);
 		var toPos = getShapeIdPos(link.dest);
 		var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
@@ -443,31 +447,36 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			var myPoints = getCurve4Points(link);
 			last2Pts[0] = { 'x': myPoints[myPoints.length-4], 'y': myPoints[myPoints.length-3]};
 			var showPoints = that.showPoints;
-			if ( isHighlighting(link) ) {
-				var oldSS = ctx.strokeStyle;
-				ctx.strokeStyle = 'yellow';
-				ctx.setLineWidth(5);
-				drawCurve(ctx, myPoints, 'yellow'); //default tension=0.5
-				ctx.setLineWidth(1);
-				ctx.strokeStyle = oldSS;
+			if ( drawHighlights ) {
+				if ( isHighlighting(link) ) {
+					var oldSS = ctx.strokeStyle;
+					ctx.strokeStyle = 'yellow';
+					ctx.setLineWidth(5);
+					drawCurve(ctx, myPoints, 'yellow'); //default tension=0.5
+					ctx.setLineWidth(1);
+					ctx.strokeStyle = oldSS;
+				}
+			} else {
+				var pointsColor = undefined;
+				drawCurve(ctx, myPoints, showPoints); //default tension=0.5
+				//drawCurve(ctx, myPoints, tension);
+				ctx.stroke();
 			}
-			var pointsColor = undefined;
-			if ( showPoints ) { pointsColor = ctx.fillStyle; }
-			drawCurve(ctx, myPoints, pointsColor); //default tension=0.5
-			//drawCurve(ctx, myPoints, tension);
-			ctx.stroke();
 		} else {
 
 			// Default to 'straight'
-			if ( isHighlighting(link) ) {
-				var oldSS = ctx.strokeStyle;
-				ctx.strokeStyle = 'yellow';
-				ctx.setLineWidth(5);
+			if ( drawHighlights ) {
+				if ( isHighlighting(link) ) {
+					var oldSS = ctx.strokeStyle;
+					ctx.strokeStyle = 'yellow';
+					ctx.setLineWidth(5);
+					drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
+					ctx.setLineWidth(1);
+					ctx.strokeStyle = oldSS;
+				}
+			} else {
 				drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
-				ctx.setLineWidth(1);
-				ctx.strokeStyle = oldSS;
 			}
-			drawLine(ctx, srcPt.x, srcPt.y, destPt.x, destPt.y);
 		}
 
 		// Put an arrow on the end?
@@ -493,15 +502,15 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		return link;
 	}
 
-	function drawLinks() {
+	function drawLinks(drawHighlights) {
 		if ( that.structure.shapes ) {
 			var len = that.structure.links.length
 			var index = 0;
 			while (index < len) {
 				var link = that.structure.links[index];
 				link = mergedLink(link);
-				logger.debug('Drawing merged link of '+JSON.stringify(link));
-				drawLink(link);
+				// logger.debug('Drawing merged link of '+JSON.stringify(link));
+				drawLink(link, drawHighlights);
 				index = index + 1;
 			}
 		}			
@@ -570,14 +579,59 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}		
 	}
 
+	var zoomX = 15;
+	var zoomY = 10;
+	var zoomSz = 20;
+	function drawZoomControls() {
+		ctx.strokeStyle = 'black';
+		ctx.fillStyle = 'black';
+		var x = zoomX;
+		var y = zoomY;
+		var sz = zoomSz;
+		ctx.strokeRect(x, y, sz, sz);
+		drawLine(ctx, x+4, y+sz/2, x+sz-4, y+sz/2);
+		drawLine(ctx, x+sz/2, y+4, x+sz/2, y+sz-4);
+
+		ctx.font = '16px Arial';
+		fillMultilineText(that.zoomLevel+"%", x+sz/2, y+sz+8+16, fontFrom(undefined, 16));
+
+		y += sz*3;
+		ctx.strokeRect(x, y, sz, sz);
+		drawLine(ctx, x+4, y+sz/2, x+sz-4, y+sz/2);
+	}
+
+	function zoomButtonContainingPos(pos) {
+		if ( pos.x >= zoomX && pos.x <= zoomX+zoomSz ) {
+			if ( pos.y >= zoomY && pos.y <= zoomY+zoomSz ) {
+				return {'action': 'zoomPlus'};
+			} else if ( pos.y >= zoomY+zoomSz*3 && pos.y <= zoomY+zoomSz*3+zoomSz ) {
+				return {'action': 'zoomMinus'};
+			} else {
+				return undefined;
+			}
+		} else {
+			return undefined;
+		}
+	}
+
 	function redraw()
 	{
 		// onsole.log('in redraw');
+		var z = 1;
+		ctx.setTransform(z, 0,  0, z,  0, 0);
 		clearCanvas();
 
+		// All drawing from this point on is scaled and shifted
+		z = that.zoomLevel/100;
+		ctx.setTransform(z, 0,  0, z,  that.pan.x, that.pan.y);
+		drawLinks(true);  // Draw the highlights first, so we don't break other shapes from our yellow line outlines
 		drawShapes();
-		drawLinks();
+		drawLinks(false);
 		drawLinkLabels();
+
+		z = 1;
+		ctx.setTransform(z, 0,  0, z,  0, 0);
+		drawZoomControls();
 	};
 
 	// Hook up for events
@@ -596,6 +650,12 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 		that.currentAction = undefined;
 	};
+
+	function applyPan(action, pos) {
+		that.pan.x = pos.x - action.offsetPos.x;
+		that.pan.y = pos.y - action.offsetPos.y;
+		redraw();
+	}
 
 	function applyDraggingShape(action, pos) {
 		var layout = getShapeLayout(action.shape)
@@ -636,29 +696,58 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		redraw();
 	}
 
-	function mouseDragForCurrentAction(pos) {
+	function mouseDragForCurrentAction(unscaledPos, pos) {
 		if ( that.currentAction ) {
 			var action = that.currentAction;
 
-			if ( action.action == 'draggingShape' ) {
-				applyDraggingShape(action, pos);
+			if ( action.action == 'pan' ) {
+				applyPan(action, pos);
+
+			} else if ( action.action == 'draggingShape' ) {
+				applyDraggingShape(action, unscaledPos);
 
 			} else if ( action.action == 'draggingPoint' ) {
-				applyDraggingPoint(action, pos);
+				applyDraggingPoint(action, unscaledPos);
 			}
 		}
 	}
 
-	function mouseUpForCurrentAction(pos) {
+	function mouseUpForCurrentAction(unscaledPos, pos) {
 		if ( that.currentAction ) {
 			var action = that.currentAction;
 
-			if ( action.action == 'draggingShape' ) {
-				applyDraggingShape(action, pos);
+			if ( action.action == 'pan' ) {
+				applyPan(action, pos);
+				doneAction();
+
+			} else if ( action.action == 'zoomPlus' ) {
+				if ( that.zoomLevel >= 100 ) {
+					that.zoomLevel += 10;
+				} else if ( that.zoomLevel >= 10 ) {
+					that.zoomLevel += 10;
+				} else {
+					that.zoomLevel += 1;
+				}
+				redraw();
+				doneAction();
+
+			} else if ( action.action == 'zoomMinus' ) {
+				if ( that.zoomLevel > 100 ) {
+					that.zoomLevel -= 10;
+				} else if ( that.zoomLevel > 10 ) {
+					that.zoomLevel -= 10;
+				} else if ( that.zoomLevel > 1 ) {
+					that.zoomLevel -= 1;
+				}
+				redraw();
+				doneAction();
+
+			} else if ( action.action == 'draggingShape' ) {
+				applyDraggingShape(action, unscaledPos);
 				doneAction();
 
 			} else if ( action.action == 'draggingPoint' ) {
-				applyDraggingPoint(action, pos);
+				applyDraggingPoint(action, unscaledPos);
 				doneAction();
 
 			} else {
@@ -669,21 +758,44 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	var isMouseDown = false;
 
+	function fadeOutLinePoints() {
+		if ( that.showPoints > 0 && that.resetShowPointsAt < (new Date()).getTime() ) {
+			if ( that.showPoints <= 0.1 ) {
+				that.showPoints = 0;
+			} else {
+				that.showPoints -= 0.2;
+			}
+			redraw();
+		}
+	}
+
+	function showLinePoints() {
+		if ( that.showPoints == 0 ) {
+			that.showPoints = 1;
+			that.resetShowPointsAt = (new Date()).getTime() + 1600;
+			redraw();
+		}
+	}
+
 	$(canvas).mousedown(function(e) {
 		// Only respond to left button
 		if ( e.which == 1 ) {
 			isMouseDown = true;
 			var pos = getMousePos(canvas, e);
 
-			var draggingShape = findShapeAt(pos);
-			var draggingPoint = findPointAt(pos);
-			if ( false ) {
+			var zoomAction = zoomButtonContainingPos(pos);
 
+			// All other things we could click on are subject to zoom scale
+			var scaledPos = { 'x': unscale(pos.x), 'y': unscale(pos.y) };
+			var draggingShape = findShapeAt(scaledPos);
+			var draggingPoint = findPointAt(scaledPos);
+			if ( zoomAction ) {
+				that.currentAction = zoomAction;
 			} else if ( draggingPoint ) {
 				//logger.info('Dragging point '+s(draggingPoint));
 				var offsetPos = {
-					'x': pos.x-draggingPoint.pt.x,
-					'y': pos.y-draggingPoint.pt.y
+					'x': scaledPos.x-draggingPoint.pt.x,
+					'y': scaledPos.y-draggingPoint.pt.y
 				};
 				that.currentAction = {
 					'action': 'draggingPoint',
@@ -695,8 +807,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				//onsole.log('Down on shape '+draggingShape.id);
 				var shapePos = getShapePos(draggingShape);
 				var offsetPos = {
-					'x': pos.x-shapePos.x,
-					'y': pos.y-shapePos.y
+					'x': scaledPos.x-shapePos.x,
+					'y': scaledPos.y-shapePos.y
 				};
 				that.currentAction = { 
 					'action': 'draggingShape',
@@ -704,37 +816,30 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 					'offsetPos': offsetPos 
 				};
 			} else {
-				that.currentAction = undefined;
+				var offsetPos = {
+					'x': pos.x - that.pan.x,
+					'y': pos.y - that.pan.y
+				};
+				that.currentAction = {
+					'action': 'pan',
+					'offsetPos': offsetPos
+				};
 			}
 		}
 	});
-
-	function fadeOutLinePoints() {
-		if ( that.showPoints && that.resetShowPointsAt < (new Date()).getTime() ) {
-			that.showPoints = false;
-			redraw();
-		}
-	}
-
-	function showLinePoints() {
-		if ( that.showPoints == false ) {
-			that.showPoints = true;
-			that.resetShowPointsAt = (new Date()).getTime() + 1600;
-			redraw();
-		}
-	}
 
 	$(canvas).mousemove(function(e) {
 		showLinePoints();
 
 		var pos = getMousePos(canvas, e);
+		var scaledPos = { 'x': unscale(pos.x), 'y': unscale(pos.y) };
 		if ( isMouseDown ) {
-			mouseDragForCurrentAction(pos);
+			mouseDragForCurrentAction(scaledPos, pos);
 			//onsole.log('Drag at '+pos.x+', '+pos.y);
 		} else {
 			// mouseover: Highlight the shape under the mouse, if not already highlighted
-			var shape = findShapeAt(pos);
-			var point = findPointAt(pos);
+			var shape = findShapeAt(scaledPos);
+			var point = findPointAt(scaledPos);
 			if ( point ) {
 				highlightLinkAndPoint(point.link, point);
 			} else if ( shape ) {
@@ -751,8 +856,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		if ( isMouseDown ) {
 			isMouseDown = false;
 			var pos = getMousePos(canvas, e);
+			var scaledPos = { 'x': unscale(pos.x), 'y': unscale(pos.y) };
 			if ( that.currentAction ) {
-				mouseUpForCurrentAction(pos);
+				mouseUpForCurrentAction(scaledPos, pos);
 			}
 		}
 	});
