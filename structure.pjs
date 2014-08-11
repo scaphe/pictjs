@@ -42,7 +42,7 @@
 			"label": "example1",
 			"color": "blue",
 			"fontColor": "red",
-			"classes": ["curve4"]
+			"type": "angle4"
 		 },
 		 {
 			"src": "dave",

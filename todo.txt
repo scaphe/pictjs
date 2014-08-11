@@ -1,9 +1,13 @@
 TODO:
-o   Different shape types (rounded box, circle, oval etc, diamond)
-o   Different line types - right angle3, angle4, angle5, curve3, curve5
+o   Different shape types (box, rounded box, circle, oval, diamond, parallelagram)
+o   Fix angle4 so it is right angles some how, probably need a
+starting direction in name of link, angle4u/d/l/r, then last
+direction is implied by where shape is?
 
 
 DONE:
+ox Different line types - right angle3, angle4, angle5, curve3,
+curve5
 ox Multiple links to given other, verify have unique ids or generate
 unique ids
 ox Fade out the points gradually over some amount of time - nicely
