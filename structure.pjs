@@ -17,11 +17,13 @@
 		},
 		{
 			"id": "fred",
+			"shape": "circle",
 			"linksTo": ["john"]
 		},
 		"jane",
 		{
 			"label": "bill",
+			"shape": "roundedRect",
 			"linksTo": [ { "dest": "jane", "end": "arrow" } ]
 		},
 		"john"

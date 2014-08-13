@@ -12,6 +12,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	var Pt0 = { 'x': 0, 'y': 0 };
 	var that = {};
 
+	that.shapeTypes = {};
 	that.linkTypes = {};
 
 	that.highlightThing = undefined;
@@ -34,6 +35,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	// Library functions, taken off the net, or by me
 	var libs = createPictJsLibs();
 	var roundRect = libs.roundRect
+	that.roundRect = roundRect;
 	var drawCurve = libs.drawCurve;
 	var drawArrow = libs.drawArrow;
 	var drawLineArrow = libs.drawLineArrow;
@@ -76,6 +78,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		};
 	};
 
+	function getShape(id) {
+		return find(that.structure.shapes, withId(id));
+	}
 
 	// Functions to find shapes etc
 	function getShapePos(shape) {
@@ -182,6 +187,26 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 		// logger.info('AbsCoords for '+ptName+" pt of "+s(pt)+' using '+s(shapePos));
 		return { 'x': shapePos.x+pt.x, 'y': shapePos.y+pt.y };
+	}
+
+	function getShapeIdType(id) {
+		var ans = getShapeType(getShape(id));
+		if ( typeof(ans) == 'undefined' ) {
+			logger.warn('Failed to find shape with id of '+id);
+		}
+		return ans;
+	}
+
+	function getShapeType(shape) {
+		var ty = shape.shape || 'rect';
+		var ans = that.shapeTypes[ty];
+		if ( typeof(ans) == 'undefined' ) {
+			logger.error('Shape type ['+ty+'] is not defined');
+			that.shapeTypes[ty] = that.shapeTypes['rect'];
+			return that.shapeTypes['rect'];
+		} else {
+			return ans;
+		}
 	}
 
 	function getLinkType(link) {
@@ -371,22 +396,10 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 	function drawShape(shape) {
 		var pos = getShapePos(shape);
-
-		if ( isHighlighting(shape) ) {
-			ctx.strokeStyle = 'yellow';
-			ctx.fillStyle = 'yellow';
-			var r = 6;
-			ctx.fillRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
-			ctx.strokeRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
-		}
-
 		ctx.strokeStyle = shape.fgColor || 'black';
 		ctx.fillStyle = styleFrom(pos, shape.bgColor, 'shape');
 
-		// Draw box
-		ctx.fillRect(pos.x,pos.y,pos.w,pos.h);
-		ctx.strokeRect(pos.x,pos.y,pos.w,pos.h);
-		//roundRect(ctx, pos.x,pos.y,pos.w,pos.h, 5, true, true);
+		getShapeType(shape).drawShape(ctx, shape, pos, isHighlighting(shape), that);
 
 		drawShapeLabel(shape);
 	}
@@ -609,25 +622,6 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		redraw();				
 	}
 
-	function restrictPointPos(layout, shapeId) {
-		var pos = getShapeIdPos(shapeId);
-		var dx = min(layout.x/pos.w, (pos.w-layout.x)/pos.w);
-		var dy = min(layout.y/pos.h, (pos.h-layout.y)/pos.h);
-		if ( dx < dy ) {
-			// Nearer to an x side, so lock the x side to edge, allow y to move freely
-			if ( layout.x < pos.w/2 ) layout.x = 0;
-			else layout.x = pos.w;
-		} else {
-			if ( layout.y < pos.h/2 ) layout.y = 0;
-			else layout.y = pos.h;
-		}
-		// Make sure not outside the edge
-		if ( layout.x < 0 ) layout.x = 0;
-		if ( layout.y < 0 ) layout.y = 0;
-		if ( layout.x > pos.w ) layout.x = pos.w;
-		if ( layout.y > pos.h ) layout.y = pos.h;
-	}
-
 	function applyDraggingPoint(action, pos) {
 		var layout = getPointLayout(action.pt)
 		//logger.info('Got point layout of '+s(layout)+' and action of '+s(action));
@@ -635,9 +629,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		layout.y = pos.y - action.offsetPos.y;
 		var link = action.pt.link;
 		if ( action.pt.ptName == 'srcPt' ) {
-			restrictPointPos(layout, action.pt.link.src);
+			getShapeIdType(link.src).restrictPointPos(layout, action.pt.link.src, that);
 		} else if ( action.pt.ptName == 'destPt' ) {
-			restrictPointPos(layout, link.dest);
+			getShapeIdType(link.dest).restrictPointPos(layout, link.dest, that);
 		}
 		getLinkType(link).restrictPoints(link, that);
 		redraw();
@@ -810,6 +804,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	});
 
+	/// FIX stuff
+
 	function fixLinksTo(shape) {
 		if ( shape.linksTo ) {
 			// logger.info('Fixing linksTo of '+JSON.stringify(shape.linksTo));
@@ -883,18 +879,17 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		var label = getShapeLabel(shape);
 		ctx.font = fontData.font;
 		var m = measureText(label, fontData);
-		var fontHeight = m.height;
-		var fontWidth = m.width;
-		var shapeW = fontWidth*1.62 + fontHeight;
-		var shapeH = min(fontHeight*1.62*2, shapeW/1.62);
 		var layout = find(that.layout.shapes, withId(shape.id));
+		var incMaxShapePos = false;
 		if ( typeof(layout) == 'undefined' ) {
+			layout = {};
+			getShapeType(shape).defaultSize(layout, m);
 			// Compute where we think is a good place to put this shape
 			// Try to find a spot that is not already too near to another shape?
 			var div = autoPlacementXDivisors[autoPlacementRow];
 			var x = maxShapePosSoFar.x;
 			var y = maxShapePosSoFar.y;
-			if ( y+shapeH > canvas.height ) {
+			if ( y+layout.h > canvas.height ) {
 				// Move to next auto-placement row
 				if ( autoPlacementRow < autoPlacementXDivisors.length-1 ) {
 					autoPlacementRow++;
@@ -905,13 +900,16 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				x = maxShapePosSoFar.x;
 				y = maxShapePosSoFar.y;				
 			}
-			//maxShapePosSoFar.x += 50;
-			maxShapePosSoFar.y += shapeH+20;
-			layout = {"id": shape.id, "x": x-shapeW/2, "y": y};
+			incMaxShapePos = true;
+			layout = {"id": shape.id, "x": x, "y": y};
 			that.layout.shapes.push(layout);			
+		} else {
+			getShapeType(shape).defaultSize(layout, m);
 		}
-		layout.w = shapeW;
-		layout.h = shapeH;
+		layout.x = layout.x-layout.w/2;  // centre it
+		if ( incMaxShapePos ) {
+			maxShapePosSoFar.y += layout.h+20;
+		}
 		// logger.info("Set size of shape "+shape.id+" to "+s(layout)+" using font of "+s(fontData));
 	}
 
@@ -970,18 +968,18 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				// Line to self, make a nice loop
 				var h = pos.h;
 				layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': 0, 'y': h/2-offset.y/2});
-				restrictPointPos(layout, link.src);
+				getShapeIdType(link.src).restrictPointPos(layout, link.src, that);
 				layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': 0, 'y': h/2+offset.y/2});
-				restrictPointPos(layout, link.src);
+				getShapeIdType(link.dest).restrictPointPos(layout, link.dest, that);
 				layout = getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': offset.x, 'y': h/2-offset.y});
 				layout = getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': offset.x, 'y': h/2+offset.y});
 				selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+8};
 			} else {
 				// Line to a different shape
 				layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': defaultEdges.fx, 'y': defaultEdges.fy});
-				restrictPointPos(layout, link.src);
+				getShapeIdType(link.src).restrictPointPos(layout, link.src, that);
 				layout = getPointLayout({'link': link, 'ptName': 'destPt'}, {'x': defaultEdges.tx, 'y': defaultEdges.ty});
-				restrictPointPos(layout, link.dest);
+				getShapeIdType(link.dest).restrictPointPos(layout, link.dest, that);
 
 				// Which extra points do we need to setup?
 				var pointNames = getLinkType(link).getPointNames();
@@ -1353,10 +1351,112 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 		return that;
 	}
+
 	that.linkTypes['straight'] = makeStraight();
 	that.linkTypes['curve4'] = makeCurve4();
 	that.linkTypes['curve3'] = makeCurve3();
 	that.linkTypes['angle4'] = makeAngle4();
+
+	function makeRect(wantRounded) {
+		var that = {};
+		that.defaultSize = function(layout, m) {
+			var fontHeight = m.height;
+			var fontWidth = m.width;
+			layout.w = fontWidth*1.62 + fontHeight;
+			layout.h = min(fontHeight*1.62*2, layout.w/1.62);
+		}
+
+		that.restrictPointPos = function(layout, shapeId, cThat) {
+			var pos = cThat.getShapeIdPos(shapeId);
+			var dx = min(layout.x/pos.w, (pos.w-layout.x)/pos.w);
+			var dy = min(layout.y/pos.h, (pos.h-layout.y)/pos.h);
+			if ( dx < dy ) {
+				// Nearer to an x side, so lock the x side to edge, allow y to move freely
+				if ( layout.x < pos.w/2 ) layout.x = 0;
+				else layout.x = pos.w;
+			} else {
+				if ( layout.y < pos.h/2 ) layout.y = 0;
+				else layout.y = pos.h;
+			}
+			// Make sure not outside the edge
+			if ( layout.x < 0 ) layout.x = 0;
+			if ( layout.y < 0 ) layout.y = 0;
+			if ( layout.x > pos.w ) layout.x = pos.w;
+			if ( layout.y > pos.h ) layout.y = pos.h;
+		}
+
+		that.drawShape = function(ctx, shape, pos, highlighted, cThat) {
+			if ( highlighted ) {
+				ctx.save();
+				ctx.strokeStyle = 'yellow';
+				ctx.fillStyle = 'yellow';
+				var r = 6;
+				if ( wantRounded ) {
+					cThat.roundRect(ctx, pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2, 6, true);
+				} else {
+					ctx.fillRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
+					ctx.strokeRect(pos.x -r, pos.y -r, pos.w +r*2, pos.h +r*2);
+				}
+				ctx.restore();
+			}
+
+			// Draw box
+			if ( wantRounded ) {
+				cThat.roundRect(ctx, pos.x, pos.y, pos.w, pos.h, 6, true);
+			} else {
+				ctx.fillRect(pos.x, pos.y, pos.w, pos.h);
+				ctx.strokeRect(pos.x, pos.y, pos.w, pos.h);
+			}
+		}
+
+		return that;
+	}
+
+	function makeCircle() {
+		var that = {};
+		that.defaultSize = function(layout, m) {
+			var fontHeight = m.height;
+			var fontWidth = m.width;
+			layout.w = fontWidth*1.62 + fontHeight;
+			layout.h = layout.w;
+		}
+
+		that.restrictPointPos = function(layout, shapeId, cThat) {
+			var pos = cThat.getShapeIdPos(shapeId);
+			var rad = pos.w/2;
+			var dy = layout.y - rad;
+			var dx = layout.x - rad;
+			var angle = Math.atan2(dy, dx);
+			layout.x = rad+Math.cos(angle)*rad;
+			layout.y = rad+Math.sin(angle)*rad;
+		}
+
+		that.drawShape = function(ctx, shape, pos, highlighted, cThat) {
+			var rad = pos.w/2;
+			if ( highlighted ) {
+				ctx.save();
+				ctx.strokeStyle = 'yellow';
+				ctx.fillStyle = 'yellow';
+				var r = 6;
+				ctx.beginPath();
+				ctx.arc(pos.x+rad, pos.y+rad, rad + r, rad + r, 180);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			ctx.beginPath();
+			ctx.arc(pos.x+rad, pos.y+rad, rad, rad, 180);
+			ctx.fill();
+			ctx.stroke();
+		}
+
+		return that;
+	}
+
+	that.shapeTypes['rect'] = makeRect();
+	that.shapeTypes['roundedRect'] = makeRect(true);
+	that.shapeTypes['circle'] = makeCircle();
 
 	return that;
 };
