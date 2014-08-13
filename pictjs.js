@@ -97,14 +97,16 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		var y = 0;
 		var w = 200;
 		var h = 200/1.62;
+		var defaultedPos = true;
 		var layout = find(that.layout.shapes, withId(shapeId));
 		if ( layout ) {
 			x = layout.x || 0;
 			y = layout.y || 0;		
 			w = layout.w || 200;
 			h = layout.h || 200/1.62;
+			defaultedPos = layout.defaultedPos;
 		}
-		var pos = { "x": x, "y": y, "w": w, "h": h };
+		var pos = { "x": x, "y": y, "w": w, "h": h, "defaultedPos": defaultedPos };
 		return pos;
 	};
 	that.getShapeIdPos = getShapeIdPos;
@@ -402,6 +404,20 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		ctx.fillStyle = styleFrom(pos, shape.bgColor, 'shape');
 
 		getShapeType(shape).drawShape(ctx, shape, pos, isHighlighting(shape), that);
+		if ( pos.defaultedPos ) {
+			// Show if the shape has not been positioned on purpose in this place
+			ctx.strokeStyle = 'red';
+			for (var r = 0; r < 4; r++) {
+				ctx.strokeRect(pos.x-r, pos.y-r, pos.w +r*2, pos.h +r*2);
+			}
+			ctx.stroke();
+			r = 8;
+			ctx.fillStyle = 'orange';
+			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x, pos.y);
+			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x+pos.w, pos.y);
+			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x, pos.y+pos.h);
+			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x+pos.w, pos.y+pos.h);
+		}
 
 		drawShapeLabel(shape);
 	}
@@ -503,7 +519,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 			ctx.font = fontData.font;
 
 			var m = measureText(label, fontData);
-			fontPos.y = fontPos.y - m.height/2;
+			fontPos.y = fontPos.y;
 
 			// Make sure people can read the label - make some "space" around it
 			if ( isHighlighting(link) ) {
@@ -629,6 +645,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		var layout = getShapeLayout(action.shape)
 		layout.x = pos.x - action.offsetPos.x;
 		layout.y = pos.y - action.offsetPos.y;
+		delete layout.defaultedPos;
 		forEach(that.structure.links, function (link) {
 			getLinkType(link).restrictPoints(link, that);
 		});
@@ -873,7 +890,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 
 	function min(a,b) { if ( a < b ) { return a; } else { return b; } }
 
-	var maxShapePosSoFar = {x:canvas.width/2, y:20};
+	var maxShapePosSoFar = {'x':canvas.width/2 || 100, 'y':20};
 	var autoPlacementRow = 0;
 	var autoPlacementXDivisors = [0.5, 0.3, 0.6, 0.15, 0.75, 0.05];
 
@@ -902,8 +919,10 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		var layout = find(that.layout.shapes, withId(shape.id));
 		var incMaxShapePos = false;
 		if ( typeof(layout) == 'undefined' ) {
+			logger.info("Defaulting shape pos for "+shape.id+" with m of "+s(m));
 			layout = {};
 			getShapeType(shape).defaultSize(layout, m);
+			logger.info("Now have layout of "+s(layout));
 			// Compute where we think is a good place to put this shape
 			// Try to find a spot that is not already too near to another shape?
 			var div = autoPlacementXDivisors[autoPlacementRow];
@@ -921,9 +940,13 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 				y = maxShapePosSoFar.y;				
 			}
 			incMaxShapePos = true;
-			layout = {"id": shape.id, "x": x, "y": y};
+			layout.id = shape.id;
+			layout.x = x;
+			layout.y = y;
 			layout.x = layout.x-layout.w/2;  // centre it
+			layout.defaultedPos = true;
 			that.layout.shapes.push(layout);			
+			logger.info('Made layout of '+s(layout));
 		} else {
 			getShapeType(shape).defaultSize(layout, m);
 		}
@@ -1382,7 +1405,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		that.defaultSize = function(layout, m) {
 			var fontHeight = m.height;
 			var fontWidth = m.width;
-			layout.w = fontWidth*1.62 + fontHeight;
+			layout.w = fontWidth + fontHeight;
 			layout.h = min(fontHeight*1.62*2, layout.w/1.62);
 		}
 

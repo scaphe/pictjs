@@ -22,7 +22,8 @@
 		},
 		"jane",
 		{
-			"label": "bill",
+			"id": "bill",
+			"label": "long bill label",
 			"shape": "roundedRect",
 			"linksTo": [ { "dest": "jane", "end": "arrow" } ]
 		},
