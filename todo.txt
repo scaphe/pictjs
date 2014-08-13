@@ -3,6 +3,8 @@ o   Different shape types (rect, roundedrect, circle, oval, diamond, parallelagr
 
 
 DONE:
+ox Snapshot image of currently visible diagram
+ox Bug: is moving everything 100 to the left after load?
 ox Circle: daveC.beginPath(); daveC.arc(110,110,40,40,50); daveC.stroke();
 ox Fix angle4 so it is right angles
 ox Different line types - right angle3, angle4, angle5, curve3,

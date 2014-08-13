@@ -6,20 +6,19 @@
   <!-- script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.js"></script -->
   <script type="text/javascript" src="jquery-1.11.1.min.js"></script>
   <script type="text/javascript" src="pictjs-libs.js"></script>
-	<script type="text/javascript" src="pictjs.js"></script>
+  <script type="text/javascript" src="pictjs.js"></script>
   </head>
   <body>
 
-  	<b>Simple example of pictjs</b>
+        <textarea id="myLayout" rows=1>Layout</textarea>
 
-  	<canvas id="myCanvas" width="1200" height="500" style="border:1px solid #000000;">
+  	<canvas id="myCanvas" width="1200" height="1000" style="border:1px solid #000000;">
 	</canvas>
 
     <div id="canvasDiv"></div>
     <script type="text/javascript"> $(document).ready(function() {
-    	 pictjs_at("myCanvas", "http://localhost:8000/structure.pjs", "./layout.pjs", "./classes.pjs");
+    	 pictjs_at("myCanvas", "myLayout", "http://localhost:8000/structure.pjs", "./layout.pjs", "./classes.pjs");
 });</script>
-
 
   </body>
 </html>

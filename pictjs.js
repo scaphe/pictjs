@@ -8,7 +8,7 @@ $.ajaxSetup({beforeSend: function(xhr){
 }
 });
 
-var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
+var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile) {
 	var Pt0 = { 'x': 0, 'y': 0 };
 	var that = {};
 
@@ -27,6 +27,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	that.currentAction = undefined;
 
 	var canvas = document.getElementById(canvasId);
+	var layoutTextarea = document.getElementById(layoutId);
+	daveL = layoutTextarea;
 	var ctx = canvas.getContext("2d");
 
 
@@ -449,6 +451,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		ctx.fillStyle = ctx.strokeStyle;
 
 		daveC = ctx;
+		daveCanvas = canvas;
 
 		getLinkType(link).drawLinkType(ctx, link, drawHighlights, last2Pts, that);
 
@@ -553,6 +556,11 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		y += sz*3;
 		ctx.strokeRect(x, y, sz, sz);
 		drawLine(ctx, x+4, y+sz/2, x+sz-4, y+sz/2);
+
+		y += sz*2;
+		ctx.strokeRect(x, y, sz, sz);
+		drawLine(ctx, x+sz/2, y+4, x+sz/2, y+6);
+		drawLine(ctx, x+sz/2, y+8, x+sz/2, y+sz-4);
 	}
 
 	function zoomButtonContainingPos(pos) {
@@ -561,6 +569,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				return {'action': 'zoomPlus'};
 			} else if ( pos.y >= zoomY+zoomSz*3 && pos.y <= zoomY+zoomSz*3+zoomSz ) {
 				return {'action': 'zoomMinus'};
+			} else if ( pos.y >= zoomY+zoomSz*5 && pos.y <= zoomY+zoomSz*5+zoomSz ) {
+				return {'action': 'snapshot'};
 			} else {
 				return undefined;
 			}
@@ -569,7 +579,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		}
 	}
 
-	function redraw()
+	function redraw(noZoomControls)
 	{
 		// onsole.log('in redraw');
 		var z = 1;
@@ -586,7 +596,9 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 
 		z = 1;
 		ctx.setTransform(z, 0,  0, z,  0, 0);
-		drawZoomControls();
+		if ( !noZoomControls ) {
+			drawZoomControls();
+		}
 	};
 
 	// Hook up for events
@@ -603,6 +615,7 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 		if ( that.actions.length > 20 ) {
 			that.actions.shift();
 		}
+		layoutTextarea.value = JSON.stringify(that.layout, undefined, 2);
 		that.currentAction = undefined;
 	};
 
@@ -682,6 +695,13 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 				}
 				redraw();
 				doneAction();
+
+			} else if ( action.action == 'snapshot' ) {
+				clearHighlights();
+				redraw(true);
+				var image = canvas.toDataURL("image/png");
+				redraw();
+				window.open(image);
 
 			} else if ( action.action == 'draggingShape' ) {
 				applyDraggingShape(action, unscaledPos);
@@ -902,11 +922,11 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 			}
 			incMaxShapePos = true;
 			layout = {"id": shape.id, "x": x, "y": y};
+			layout.x = layout.x-layout.w/2;  // centre it
 			that.layout.shapes.push(layout);			
 		} else {
 			getShapeType(shape).defaultSize(layout, m);
 		}
-		layout.x = layout.x-layout.w/2;  // centre it
 		if ( incMaxShapePos ) {
 			maxShapePosSoFar.y += layout.h+20;
 		}
@@ -1461,8 +1481,8 @@ var PictJS = function(canvasId, structureFile, layoutFile, classesFile) {
 	return that;
 };
 
-function pictjs_at(canvasId, structureFile, layoutFile, classesFile) {
-	var pictJS = PictJS(canvasId, structureFile, layoutFile, classesFile)
+function pictjs_at(canvasId, layoutId, structureFile, layoutFile, classesFile) {
+	var pictJS = PictJS(canvasId, layoutId, structureFile, layoutFile, classesFile)
 };
 
 //console.log('done');
