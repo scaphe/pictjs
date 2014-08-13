@@ -90,7 +90,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 	};
 
 	function unscale(x) { return x / that.zoomLevel * 100; }
-	function unscalePos(pos) { return { 'x': unscale(pos.x) - that.pan.x, 'y': unscale(pos.y)-that.pan.y }; }
+	function unscalePos(pos) { return { 'x': unscale(pos.x - that.pan.x), 'y': unscale(pos.y-that.pan.y) }; }
 
 	function getShapeIdPos(shapeId) {
 		var x = 0;

@@ -1,5 +1,5 @@
 TODO:
-o   Different shape types (rect, roundedrect, circle, oval, diamond, parallelagram)
+o   Different shape types (rect, roundrect, circle, oval, diamond, parallelagram)
 
 
 DONE:
