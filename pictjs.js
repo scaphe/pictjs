@@ -10,6 +10,7 @@ $.ajaxSetup({beforeSend: function(xhr){
 
 var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile) {
 	var Pt0 = { 'x': 0, 'y': 0 };
+	var defaultLinkFontPx = 15;
 	var that = {};
 
 	that.shapeTypes = {};
@@ -200,6 +201,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		}
 		return ans;
 	}
+	that.getShapeIdType = getShapeIdType;
 
 	function getShapeType(shape) {
 		var ty = shape.shape || 'rect';
@@ -303,7 +305,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 				var cls = allClasses[index];
 				var clsDef = that.classes[cls];
 				shape = $.extend(true, {}, clsDef, shape);
-				//logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
+				logger.info('Applied class of '+cls+' of '+JSON.stringify(clsDef)+' to '+JSON.stringify(shape));
 				index = index + 1;
 			}
 		}
@@ -406,17 +408,20 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		getShapeType(shape).drawShape(ctx, shape, pos, isHighlighting(shape), that);
 		if ( pos.defaultedPos ) {
 			// Show if the shape has not been positioned on purpose in this place
-			ctx.strokeStyle = 'red';
+			var unsetColor = '#ff5500';
+			ctx.strokeStyle = unsetColor;
 			for (var r = 0; r < 4; r++) {
 				ctx.strokeRect(pos.x-r, pos.y-r, pos.w +r*2, pos.h +r*2);
 			}
 			ctx.stroke();
 			r = 8;
-			ctx.fillStyle = 'orange';
+			ctx.fillStyle = unsetColor;
+			/*
 			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x, pos.y);
 			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x+pos.w, pos.y);
 			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x, pos.y+pos.h);
 			drawLine(ctx, pos.x+pos.w/2, pos.y+pos.h/2, pos.x+pos.w, pos.y+pos.h);
+			*/
 		}
 
 		drawShapeLabel(shape);
@@ -515,7 +520,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 			var points = getLinkType(link).getPoints(link);
 			var fontPos = getLinkType(link).getLabelPos(link);
 
-			var fontData = fontFrom(link.font, 15);
+			var fontData = fontFrom(link.font, defaultLinkFontPx);
 			ctx.font = fontData.font;
 
 			var m = measureText(label, fontData);
@@ -617,6 +622,11 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		}
 	};
 
+	that.limitAbs = function(n, maxN) {
+		if ( n < 0 ) return Math.max(-maxN, n);
+		else return Math.min(maxN, n);
+	}
+
 	// Hook up for events
 	function getMousePos(canvas, evt) {
 	    var rect = canvas.getBoundingClientRect();
@@ -646,6 +656,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		layout.x = pos.x - action.offsetPos.x;
 		layout.y = pos.y - action.offsetPos.y;
 		delete layout.defaultedPos;
+		// Moved shape, possibly links are auto-positioning, so will need to change where the points are
 		forEach(that.structure.links, function (link) {
 			getLinkType(link).restrictPoints(link, that);
 		});
@@ -658,11 +669,13 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		layout.x = pos.x - action.offsetPos.x;
 		layout.y = pos.y - action.offsetPos.y;
 		var link = action.pt.link;
+		// Dragging point so we are going to use a harsh clipping mechanism for our edge of shape clip
 		if ( action.pt.ptName == 'srcPt' ) {
 			getShapeIdType(link.src).restrictPointPos(layout, action.pt.link.src, that);
 		} else if ( action.pt.ptName == 'destPt' ) {
 			getShapeIdType(link.dest).restrictPointPos(layout, link.dest, that);
 		}
+		//logger.info('Dragging for link '+s(link));
 		getLinkType(link).restrictPoints(link, that);
 		redraw();
 	}
@@ -851,7 +864,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 				var link = shape.linksTo[index];
 				//logger.info('Fixing link of '+JSON.stringify(link));
 				if ( typeof(link) == 'string' ) {
-					link = { 'dest': link, 'type': 'straight' };
+					link = { 'dest': link };
 					//shape.linksTo[index] = link;
 				}
 				link.src = shape.id;
@@ -1001,7 +1014,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 			var defaultEdges = fromToDefaultEdges(getShapeIdPos(link.src), getShapeIdPos(link.dest));
 
 			// Link to self must be curved or something, straight will not do
-			if ( link.src == link.dest && (!link.type || link.type == 'straight') ) {
+			if ( link.src == link.dest && (!link.type || link.type == 'straight' || link.type == 'autoStraight') ) {
 				link.type = 'curve4';
 			}
 
@@ -1016,7 +1029,8 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 				getShapeIdType(link.dest).restrictPointPos(layout, link.dest, that);
 				layout = getPointLayout({'link': link, 'ptName': 'pt2'}, {'x': offset.x, 'y': h/2-offset.y});
 				layout = getPointLayout({'link': link, 'ptName': 'pt3'}, {'x': offset.x, 'y': h/2+offset.y});
-				selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+8};
+				var fontData = fontFrom(link.font, defaultLinkFontPx);
+				selfOffsets[link.src] = {'x': offset.x-50, 'y': offset.y+fontData.px+1};
 			} else {
 				// Line to a different shape
 				layout = getPointLayout({'link': link, 'ptName': 'srcPt'}, {'x': defaultEdges.fx, 'y': defaultEdges.fy});
@@ -1357,16 +1371,45 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 		return that;
 	}
 
-	function makeStraight() {
+	function makeStraight(autoPosition) {
 		var that = {};
-		that.name = function() { return "straight"; }
+		that.name = function() { if (autoPosition) return "autoStraight"; else return "straight"; }
 		that.getPointNames = function() { return ['srcPt', 'destPt']; }
 		that.getPoints = function(link) {
 			var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
 			var destPt = absolutePtCoords(link, 'destPt', link.destPt);
 			return [srcPt, destPt]; 
 		}
-		that.restrictPoints = function(link, cThat) {}
+		that.restrictPoints = function(link, cThat) {
+			if ( autoPosition ) {
+				// Make the start/end points the centre of the shapes
+				var srcShape = cThat.getShapeIdType(link.src);
+				var destShape = cThat.getShapeIdType(link.dest);
+				var srcShapePos = cThat.getShapeIdPos(link.src);
+				var destShapePos = cThat.getShapeIdPos(link.dest);
+				// srcPt is relative to the src shape pos, destPt to dest shape
+				var cx1 = srcShapePos.x + srcShapePos.w/2;
+				var cy1 = srcShapePos.y + srcShapePos.h/2;
+				var cx2 = destShapePos.x + destShapePos.w/2;
+				var cy2 = destShapePos.y + destShapePos.h/2;
+
+				var srcPt = cThat.getPointLayout({'link': link, 'ptName': 'srcPt'});
+				var deltasToEdge = srcShape.deltasToEdge(cx1, cy1, cx2, cy2, link.src, cThat);
+				srcPt.x = srcShapePos.w/2 + deltasToEdge.dx;
+				srcPt.y = srcShapePos.h/2 + deltasToEdge.dy;
+
+				var destPt = cThat.getPointLayout({'link': link, 'ptName': 'destPt'});
+				deltasToEdge = destShape.deltasToEdge(cx2, cy2, cx1, cy1, link.dest, cThat);
+				destPt.x = destShapePos.w/2 + deltasToEdge.dx;
+				destPt.y = destShapePos.h/2 + deltasToEdge.dy;
+
+				logger.info('DAVEDAVE: Auto setting edges for link '+link.id+' using '+s({'deltasToEdge': deltasToEdge, 'cx1':cx1, 'cy1':cy1, 'cx2': cx2, 'cy2':cy2, 'srcPt': srcPt, 'destPt': destPt})); 
+
+				// Re-restrict the src/dest positions
+				//cThat.getShapeIdType(link.src).restrictPointPos(srcPt, link.src, cThat);
+				//cThat.getShapeIdType(link.dest).restrictPointPos(destPt, link.dest, cThat);
+			}
+		}
 		that.getLabelPos = function(link) {
 			var srcPt = absolutePtCoords(link, 'srcPt', link.srcPt);
 			var destPt = absolutePtCoords(link, 'destPt', link.destPt);
@@ -1396,6 +1439,7 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 	}
 
 	that.linkTypes['straight'] = makeStraight();
+	that.linkTypes['autoStraight'] = makeStraight(true);
 	that.linkTypes['curve4'] = makeCurve4();
 	that.linkTypes['curve3'] = makeCurve3();
 	that.linkTypes['angle4'] = makeAngle4();
@@ -1408,7 +1452,22 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 			layout.w = fontWidth + fontHeight;
 			layout.h = min(fontHeight*1.62*2, layout.w/1.62);
 		}
-
+		that.deltasToEdge = function(x1, y1, x2, y2, shapeId, cThat) {
+			var pos = cThat.getShapeIdPos(shapeId);
+			var w = pos.w;
+			var h = pos.h;
+			var angle = Math.atan2(y2-y1, x2-x1);
+			var tanA = Math.abs(Math.tan(angle));
+			var xSign = 1; if ( Math.abs(angle) > Math.PI/2 ) xSign = -1;
+			var ySign = 1; if ( angle < 0 ) ySign = -1;
+			var x1dash = w/2 / tanA * xSign;
+			var y1dash = h/2 * tanA * ySign;
+			logger.info('Data is '+s({'x2':x2, 'y2':y2, 'angle': angle, 'tan': Math.tan(angle), 'x1dash':x1dash, 'y1dash':y1dash}));
+			x1dash = cThat.limitAbs(x1dash, w/2);
+			y1dash = cThat.limitAbs(y1dash, h/2);
+			// dx,dy are how much to shift the point so it will end up on the edge of our shape
+			return { 'dx': x1dash, 'dy': y1dash };
+		}
 		that.restrictPointPos = function(layout, shapeId, cThat) {
 			var pos = cThat.getShapeIdPos(shapeId);
 			var dx = min(layout.x/pos.w, (pos.w-layout.x)/pos.w);
@@ -1464,6 +1523,12 @@ var PictJS = function(canvasId, layoutId, structureFile, layoutFile, classesFile
 			layout.h = layout.w;
 		}
 
+		that.deltasToEdge = function(x1, y1, x2, y2, shapeId, cThat) {
+			// TODO: Need to do deltasToEdge for circles
+			var x1dash = 0;
+			var y1dash = 0;
+			return { 'dx': x1dash, 'dy': y1dash };
+		}
 		that.restrictPointPos = function(layout, shapeId, cThat) {
 			var pos = cThat.getShapeIdPos(shapeId);
 			var rad = pos.w/2;

@@ -1,8 +1,11 @@
 TODO:
+o   Write deltasToEdge for circles
+o   Ability to move labels around - labelDx, labelDy
 o   Different shape types (rect, roundrect, circle, oval, diamond, parallelagram)
 
 
 DONE:
+ox Fix links to self so gap is a function of font height
 ox Snapshot image of currently visible diagram
 ox Bug: is moving everything 100 to the left after load?
 ox Circle: daveC.beginPath(); daveC.arc(110,110,40,40,50); daveC.stroke();

@@ -9,6 +9,8 @@
 	},
 
 	"arrows": {
+		"type": "autoStraight",
+		"color": "green",
 		"end": "arrow"
 	}
 }
